@@ -40,11 +40,7 @@ def get_column_type(data_cursor, col, categorical_threshold, schema_name,
 
 
 def is_numeric(data_cursor, col, schema_name, table_name):
-    """Return True if column is numeric.
-
-    Return True if column is numeric. Converts text column to numeric and
-    stores it in temporary table metabase.converted_data.
-
+    """Return True and contents of column if column is numeric.
     """
 
     try:
@@ -68,11 +64,7 @@ def is_numeric(data_cursor, col, schema_name, table_name):
 
 
 def is_date(data_cursor, col, schema_name, table_name):
-    """Return True if column is date.
-
-    Return True if column is type date. Converts text column to date and stores
-    it in temporary table metabase.converted_data.
-
+    """Return True and contents of column if column is date.
     """
 
     try:
@@ -97,13 +89,7 @@ def is_date(data_cursor, col, schema_name, table_name):
 
 def is_code(data_cursor, col, schema_name, table_name,
             categorical_threshold):
-    """Return True if column is categorical.
-
-    Return True if column categorical. Stores a copy of the column in
-    metabase.converted_data. Note: Even if the column is not categorical, the
-    column is copied to metadata.converted_metadata as a text column and the
-    column will be assumed to be text.
-
+    """Return True and contents of column if column is categorical.
     """
 
     data_cursor.execute(
@@ -137,7 +123,7 @@ def is_code(data_cursor, col, schema_name, table_name,
 
 
 def update_numeric(metabase_cursor, col_name, col_data, data_table_id):
-    """Update Column Info  and Numeric Column for a numerical column."""
+    """Update Column Info and Numeric Column for a numerical column."""
 
     update_column_info(metabase_cursor, col_name, data_table_id, 'numeric')
     # Update created by, created date.
