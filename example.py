@@ -22,6 +22,7 @@ select * from metabase.code_frequency where data_table_id = <data_table_id>;
 """
 
 import pandas as pd
+import numpy as np
 import sqlalchemy
 
 from metabase import extract_metadata
@@ -30,7 +31,7 @@ from metabase import extract_metadata
 ############################################
 # Change here.
 ############################################
-file_name = 'data.csv'
+file_name = 'data/adrf-000103.csv'
 schema_name = 'data'    # Must specify a schema.
 table_name = 'example'
 categorical_threshold = 5
@@ -39,7 +40,10 @@ categorical_threshold = 5
 full_table_name = schema_name + '.' + table_name
 
 # Create a text only table in the data base data.example.
-data = pd.read_csv(file_name)
+data = pd.read_csv(file_name, encoding='latin-1')
+# Convert nan to '' tempoarily for testing.
+data = data.replace(np.nan, '', regex=True)
+
 engine = sqlalchemy.create_engine('postgres://metaadmin@localhost/postgres')
 conn = engine.connect()
 data.to_sql(

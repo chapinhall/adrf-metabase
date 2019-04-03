@@ -551,16 +551,25 @@ class ExtractMetadataTest(unittest.TestCase):
             FROM metabase.code_frequency
         """).fetchall()
 
+        for i in results:
+            print(i)
+
         assert results[0][0] == 1
         assert results[0][1] == 'c_code'
-        assert results[0][2] == 'F'
-        assert results[0][3] == 2
+        assert(results[0][2] in ('M','F'))
         assert isinstance(results[0][4], str)
         assert isinstance(results[0][5], datetime.datetime)
 
         assert results[1][0] == 1
         assert results[1][1] == 'c_code'
-        assert results[1][2] == 'M'
-        assert results[1][3] == 1
+        assert(results[1][2] in ('M', 'F'))
         assert isinstance(results[1][4], str)
         assert isinstance(results[1][5], datetime.datetime)
+
+        # Frequencies
+        if results[0][2] == 'F':
+            assert results[0][3] == 2
+            assert results[1][3] == 1
+        else:
+            assert results[0][3] == 1
+            assert results[1][3] == 2

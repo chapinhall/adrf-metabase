@@ -117,16 +117,17 @@ class ExtractMetadata():
 
         column_names = self.__get_column_names()
 
-        for col in column_names:
-            column_type = self.__get_column_type(col, categorical_threshold)
-            if column_type == 'numeric':
-                self.__update_numeric_metadata(col)
-            elif column_type == 'text':
-                self.__update_text_metadata(col)
-            elif column_type == 'date':
-                self.__update_date_metadata(col)
-            elif column_type == 'code':
-                self.__update_code_metadata(col)
+        for col_name in column_names:
+            column_data = self.__get_column_type(col_name,
+                                                 categorical_threshold)
+            if column_data.type == 'numeric':
+                self.__update_numeric_metadata(col_name, column_data.data)
+            elif column_data.type == 'text':
+                self.__update_text_metadata(col_name, column_data.data)
+            elif column_data.type == 'date':
+                self.__update_date_metadata(col_name, column_data.data)
+            elif column_data.type == 'code':
+                self.__update_code_metadata(col_name, column_data.data)
             else:
                 raise ValueError('Unknown column type')
 
@@ -137,7 +138,6 @@ class ExtractMetadata():
             (str): Column names.
 
         """
-
         self.data_cur.execute(
                 """
                 SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS
@@ -195,9 +195,7 @@ class ExtractMetadata():
 
         """
 
-        # TODO Use server side cursor here
-
-        type = extract_metadata_helper.get_column_type(
+        column_data = extract_metadata_helper.get_column_type(
             self.data_cur,
             col,
             categorical_threshold,
@@ -205,9 +203,9 @@ class ExtractMetadata():
             self.table_name
         )
 
-        return type
+        return column_data
 
-    def __update_numeric_metadata(self, col):
+    def __update_numeric_metadata(self, col_name, col_data):
         """Extract metadata from a numeric column.
 
         Extract metadata from a numeric column and store metadata in Column
@@ -216,13 +214,13 @@ class ExtractMetadata():
         """
 
         extract_metadata_helper.update_numeric(
-            self.data_cur,
             self.metabase_cur,
-            col,
+            col_name,
+            col_data,
             self.data_table_id,
         )
 
-    def __update_text_metadata(self, col):
+    def __update_text_metadata(self, col_name, col_data):
         """Extract metadata from a text column.
 
         Extract metadata from a text column and store metadata in Column Info
@@ -231,13 +229,13 @@ class ExtractMetadata():
         """
 
         extract_metadata_helper.update_text(
-            self.data_cur,
             self.metabase_cur,
-            col,
+            col_name,
+            col_data,
             self.data_table_id,
         )
 
-    def __update_date_metadata(self, col):
+    def __update_date_metadata(self, col_name, col_data):
         """Extract metadata from a date column.
 
         Extract metadata from date column and store metadate in Column Info and
@@ -246,13 +244,13 @@ class ExtractMetadata():
         """
 
         extract_metadata_helper.update_date(
-            self.data_cur,
             self.metabase_cur,
-            col,
+            col_name,
+            col_data,
             self.data_table_id,
         )
 
-    def __update_code_metadata(self, col):
+    def __update_code_metadata(self, col_name, col_data):
         """Extract metadata from a categorial column.
 
         Extract metadata from a categorial columns and store metadata in Column
@@ -262,8 +260,8 @@ class ExtractMetadata():
         # TODO: modify categorical_threshold to take percentage arguments.
 
         extract_metadata_helper.update_code(
-            self.data_cur,
             self.metabase_cur,
-            col,
+            col_name,
+            col_data,
             self.data_table_id,
         )
