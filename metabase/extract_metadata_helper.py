@@ -189,7 +189,10 @@ def get_numeric_metadata(col_data):
     max_col = max(col_data)
     min_col = min(col_data)
 
-    numeric_stats = namedtuple('numeric_stats', ['min', 'max', 'mean', 'median'])
+    numeric_stats = namedtuple(
+        'numeric_stats',
+        ['min', 'max', 'mean', 'median'],
+    )
     return numeric_stats(min_col, max_col, mean, median)
 
 
