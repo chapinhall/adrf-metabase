@@ -1,4 +1,13 @@
-"""Tests for extract_metadata.py"""
+"""
+Tests for extract_metadata.py
+
+Uses pytest to setup fixtures for each group of tests.
+
+References:
+    - http://pythontesting.net/framework/pytest/pytest-fixtures-easy-example/
+    - http://pythontesting.net/framework/pytest/pytest-xunit-style-fixtures/
+
+"""
 
 import datetime
 from unittest.mock import MagicMock, patch
