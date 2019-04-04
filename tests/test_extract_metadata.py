@@ -81,214 +81,46 @@ def setup_module(request):
     )
 
 
-# #############################################################################
-#   Test functions
-# #############################################################################
-
-#   Tests for `__get_table_name()`
-# =========================================================================
-
-@pytest.fixture()
-def setup_get_table_name(setup_module, request):
-    """
-    Setup function-level fixtures for `__get_table_name()`.
-    """
-
-    engine = setup_module.engine
-
-    engine.execute("""
-        INSERT INTO metabase.data_table (data_table_id, file_table_name) VALUES
-            (1, 'table_name_not_splitable'),
-            (2, 'table.name.contain.extra.dot'),
-            (3, 'data.data_table_name');
-    """)
-
-    def teardown_get_table_name():
-        engine.execute('TRUNCATE TABLE metabase.data_table CASCADE')
-
-    request.addfinalizer(teardown_get_table_name)
-
-
-def test_get_table_name_data_table_id_not_found(
-        setup_module,
-        setup_get_table_name):
-    with pytest.raises(ValueError):
-        with patch(
-                'metabase.extract_metadata.settings',
-                setup_module.mock_params):
-            extract_metadata.ExtractMetadata(data_table_id=0)
-
-
-def test_get_table_name_file_table_name_not_splitable(setup_module,
-                                                      setup_get_table_name):
-    with pytest.raises(ValueError):
-        with patch(
-                'metabase.extract_metadata.settings',
-                setup_module.mock_params):
-            extract_metadata.ExtractMetadata(data_table_id=1)
-
-
-def test_get_table_name_file_table_name_contain_extra_dot(
-        setup_module,
-        setup_get_table_name):
-    with pytest.raises(ValueError):
-        with patch(
-                'metabase.extract_metadata.settings',
-                setup_module.mock_params):
-            extract_metadata.ExtractMetadata(data_table_id=2)
-
-
-def test_get_table_name_one_data_table(
-        setup_module,
-        setup_get_table_name):
-    with patch('metabase.extract_metadata.settings', setup_module.mock_params):
-        extract = extract_metadata.ExtractMetadata(data_table_id=3)
-
-    assert (('data', 'data_table_name')
-            == (extract.schema_name, extract.table_name))
-
-
-#   Tests for `_get_table_level_metadata()`
+#   Tests for `_process_table()`
 # =========================================================================
 
 @pytest.fixture
-def setup_get_table_level_metadata(setup_module, request):
+def setup_empty_table(setup_module, request):
     """
-    Setup function-level fixtures for `_get_table_level_metadata()`.
+    Setup function-level fixtures for 'process_table()'.
     """
-
     engine = setup_module.engine
+
     engine.execute("""
         INSERT INTO metabase.data_table (data_table_id, file_table_name) VALUES
-            (0, 'data.table_0_row'),
-            (1, 'data.table_1_row_1_col'),
-                -- Also used to test "update by" and "date last updated"
+            (1, 'data.col_level_meta');
 
-            (2, 'data.table_2_row_2_col');
-
-        CREATE TABLE data.table_0_row (c1 INT PRIMARY KEY);
-
-        CREATE TABLE data.table_1_row_1_col (c1 INT PRIMARY KEY);
-        INSERT INTO data.table_1_row_1_col (c1) VALUES (1);
-
-        CREATE TABLE data.table_2_row_2_col (c1 INT PRIMARY KEY, c2 TEXT);
-        INSERT INTO data.table_2_row_2_col (c1, c2) VALUES (1, 'a'), (2, 'b');
+        CREATE TABLE data.col_level_meta
+            (c_num INT, c_text TEXT, c_code TEXT, c_date DATE);
     """)
 
-    def teardown_get_table_level_metadata():
+    def teardown_get_column_level_metadata():
         engine.execute("""
             TRUNCATE TABLE metabase.data_table CASCADE;
-            DROP TABLE data.table_0_row;
-            DROP TABLE data.table_1_row_1_col;
-            DROP TABLE data.table_2_row_2_col;
+            DROP TABLE data.col_level_meta;
         """)
 
-    request.addfinalizer(teardown_get_table_level_metadata)
+    request.addfinalizer(teardown_get_column_level_metadata)
 
 
-def test_get_table_level_metadata_num_of_rows_0_row_raise_error(
+def test_empty_table(
         setup_module,
-        setup_get_table_level_metadata):
-
-    with patch(
-            'metabase.extract_metadata.settings',
-            setup_module.mock_params):
-        extract = extract_metadata.ExtractMetadata(data_table_id=0)
-
-    with pytest.raises(ValueError):
-        extract._get_table_level_metadata()
-
-
-def test_get_table_level_metadata_1_row_1_col(
-        setup_module,
-        setup_get_table_level_metadata):
+        setup_empty_table):
+    """Test extracting column level metadata from an empy table."""
 
     with patch(
             'metabase.extract_metadata.settings',
             setup_module.mock_params):
         extract = extract_metadata.ExtractMetadata(data_table_id=1)
 
-    extract._get_table_level_metadata()
+    with pytest.raises(ValueError):
+        extract.process_table(categorical_threshold=2)
 
-    engine = setup_module.engine
-    result = engine.execute("""
-        SELECT number_rows, number_columns
-        FROM metabase.data_table
-        WHERE data_table_id = 1
-    """).fetchall()
-
-    assert (1, 1) == result[0]
-
-
-def test_get_table_level_metadata_2_row_2_col(
-        setup_module,
-        setup_get_table_level_metadata):
-
-    with patch(
-            'metabase.extract_metadata.settings',
-            setup_module.mock_params):
-        extract = extract_metadata.ExtractMetadata(data_table_id=2)
-
-    extract._get_table_level_metadata()
-
-    engine = setup_module.engine
-    result = engine.execute("""
-        SELECT number_rows, number_columns
-        FROM metabase.data_table
-        WHERE data_table_id = 2
-    """).fetchall()
-
-    assert (2, 2) == result[0]
-
-
-def test_get_table_level_metadata_updated_by_user_name_not_empty(
-        setup_module,
-        setup_get_table_level_metadata):
-    test_data_table_id = 1
-
-    with patch(
-            'metabase.extract_metadata.settings',
-            setup_module.mock_params):
-        extract = extract_metadata.ExtractMetadata(
-            data_table_id=test_data_table_id)
-    extract._get_table_level_metadata()
-
-    engine = setup_module.engine
-    result = engine.execute("""
-        SELECT updated_by FROM metabase.data_table WHERE data_table_id = {}
-    """.format(test_data_table_id)).fetchall()
-
-    result_updated_by_user_name = result[0][0]
-
-    assert (isinstance(result_updated_by_user_name, str)
-            and (len(result_updated_by_user_name) > 0))
-
-
-def test_get_table_level_metadata_date_last_updated_not_empty(
-        setup_module,
-        setup_get_table_level_metadata):
-
-    test_data_table_id = 1
-
-    with patch(
-            'metabase.extract_metadata.settings',
-            setup_module.mock_params):
-        extract = extract_metadata.ExtractMetadata(
-            data_table_id=test_data_table_id)
-    extract._get_table_level_metadata()
-
-    engine = setup_module.engine
-    result = engine.execute("""
-        SELECT date_last_updated
-        FROM metabase.data_table
-        WHERE data_table_id = {}
-    """.format(test_data_table_id)).fetchall()
-
-    assert isinstance(result[0]['date_last_updated'], datetime.datetime)
-
-
-#   Tests for `_get_column_level_metadata()`
-# =========================================================================
 
 @pytest.fixture
 def setup_get_column_level_metadata(setup_module, request):
@@ -330,7 +162,7 @@ def test_get_column_level_metadata_column_info(
             setup_module.mock_params):
         extract = extract_metadata.ExtractMetadata(data_table_id=1)
 
-    extract._get_column_level_metadata(categorical_threshold=2)
+    extract.process_table(categorical_threshold=2)
 
     # Check if the length of column info results equals to 4 columns.
     engine = setup_module.engine
@@ -348,7 +180,7 @@ def test_get_column_level_metadata_numeric(
             'metabase.extract_metadata.settings',
             setup_module.mock_params):
         extract = extract_metadata.ExtractMetadata(data_table_id=1)
-    extract._get_column_level_metadata(categorical_threshold=2)
+    extract.process_table(categorical_threshold=2)
 
     engine = setup_module.engine
     results = engine.execute("""
@@ -383,7 +215,7 @@ def test_get_column_level_metadata_text(
             'metabase.extract_metadata.settings',
             setup_module.mock_params):
         extract = extract_metadata.ExtractMetadata(data_table_id=1)
-    extract._get_column_level_metadata(categorical_threshold=2)
+    extract.process_table(categorical_threshold=2)
 
     engine = setup_module.engine
     results = engine.execute("""
@@ -416,7 +248,7 @@ def test_get_column_level_metadata_date(
             'metabase.extract_metadata.settings',
             setup_module.mock_params):
         extract = extract_metadata.ExtractMetadata(data_table_id=1)
-    extract._get_column_level_metadata(categorical_threshold=2)
+    extract.process_table(categorical_threshold=2)
 
     engine = setup_module.engine
     results = engine.execute("""
@@ -446,7 +278,7 @@ def test_get_column_level_metadata_code(
             'metabase.extract_metadata.settings',
             setup_module.mock_params):
         extract = extract_metadata.ExtractMetadata(data_table_id=1)
-    extract._get_column_level_metadata(categorical_threshold=2)
+    extract.process_table(categorical_threshold=2)
 
     engine = setup_module.engine
     results = engine.execute("""
