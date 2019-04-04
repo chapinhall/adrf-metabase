@@ -26,8 +26,8 @@ from metabase import extract_metadata
 #   Module-level fixtures
 # #############################################################################
 
-@pytest.fixture()
-def setup_module(scope='module'):
+@pytest.fixture(scope='module')
+def setup_module(request):
     """
     Setup module-level fixtures.
     """
@@ -61,6 +61,14 @@ def setup_module(scope='module'):
     mock_params.metabase_connection_string = conn_str
     mock_params.data_connection_string = conn_str
 
+    def teardown_module():
+        """
+        Delete the temporary database.
+        """
+        postgresql.stop()
+
+    request.addfinalizer(teardown_module)
+
     return_db = collections.namedtuple(
         'db',
         ['postgresql', 'engine', 'mock_params']
@@ -71,14 +79,6 @@ def setup_module(scope='module'):
         engine=engine,
         mock_params=mock_params
     )
-
-
-@pytest.fixture()
-def teardown_module(setup_module):
-    """
-    Delete the temporary database.
-    """
-    setup_module.postgresql.stop()
 
 
 # #############################################################################
