@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import alembic.config
 from alembic.config import Config
 import pytest
+import psycopg2
 import sqlalchemy
 import testing.postgresql
 
@@ -150,6 +151,32 @@ def setup_get_column_level_metadata(setup_module, request):
         """)
 
     request.addfinalizer(teardown_get_column_level_metadata)
+
+
+def test_rollback(
+        setup_module,
+        setup_get_column_level_metadata):
+    """Test data_table is not updated when an update on column_info fails."""
+    engine = setup_module.engine
+    engine.execute('''
+        INSERT INTO metabase.column_info (data_table_id, column_name) VALUES
+        (1,'c_num')
+    ''')
+
+    with patch(
+            'metabase.extract_metadata.settings',
+            setup_module.mock_params):
+        extract = extract_metadata.ExtractMetadata(data_table_id=1)
+
+    with pytest.raises(psycopg2.IntegrityError):
+        extract.process_table(categorical_threshold=2)
+
+    result = engine.execute(
+        """SELECT number_rows
+        FROM metabase.data_table
+        where data_table_id = 1""").fetchall()[0][0]
+
+    assert None is result
 
 
 def test_get_column_level_metadata_column_info(
