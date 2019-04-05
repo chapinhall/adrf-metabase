@@ -21,6 +21,8 @@ select * from metabase.code_frequency where data_table_id = <data_table_id>;
 
 """
 
+import argparse
+
 import pandas as pd
 import numpy as np
 import sqlalchemy
@@ -28,30 +30,23 @@ import sqlalchemy
 from metabase import extract_metadata
 
 
-############################################
-# Change here.
-############################################
-file_name = 'data/adrf-000103.csv'
-schema_name = 'data'    # Must specify a schema.
-table_name = 'example'
-categorical_threshold = 5
-############################################
+parser = argparse.ArgumentParser()
+
+parser.add_argument('-s', '--schema', type=str, required=True,
+    help='Schema name of the data')
+parser.add_argument('-t', '--table', type=str, required=True,
+    help='Table name of the data')
+parser.add_argument('-c', '--categorical', type=int, default=10,
+    help='Max number of distinct values in all categorical columns')
+
+args = parser.parse_args()
+schema_name = args.schema
+table_name = args.table
+categorical_threshold = args.categorical
 
 full_table_name = schema_name + '.' + table_name
 
-# Create a text only table in the data base data.example.
-data = pd.read_csv(file_name, encoding='latin-1')
-# Convert nan to '' tempoarily for testing.
-# TODO
-data = data.replace(np.nan, '', regex=True)
-
 engine = sqlalchemy.create_engine('postgres://metaadmin@localhost/postgres')
-conn = engine.connect()
-data.to_sql(
-    table_name, conn,
-    if_exists='replace',
-    index=False,
-    schema=schema_name)
 
 # Update meatabase.data_table with this new table.
 max_id = engine.execute(
