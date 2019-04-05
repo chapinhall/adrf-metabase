@@ -82,7 +82,11 @@ def setup_module(request):
     )
 
 
-#   Tests for `_process_table()`
+# #############################################################################
+#   Test functions
+# #############################################################################
+
+#   Tests for `process_table()`
 # =========================================================================
 
 @pytest.fixture
@@ -100,18 +104,16 @@ def setup_empty_table(setup_module, request):
             (c_num INT, c_text TEXT, c_code TEXT, c_date DATE);
     """)
 
-    def teardown_get_column_level_metadata():
+    def teardown_empty_table():
         engine.execute("""
             TRUNCATE TABLE metabase.data_table CASCADE;
             DROP TABLE data.col_level_meta;
         """)
 
-    request.addfinalizer(teardown_get_column_level_metadata)
+    request.addfinalizer(teardown_empty_table)
 
 
-def test_empty_table(
-        setup_module,
-        setup_empty_table):
+def test_empty_table(setup_module, setup_empty_table):
     """Test extracting column level metadata from an empy table."""
 
     with patch(
@@ -151,32 +153,6 @@ def setup_get_column_level_metadata(setup_module, request):
         """)
 
     request.addfinalizer(teardown_get_column_level_metadata)
-
-
-def test_rollback(
-        setup_module,
-        setup_get_column_level_metadata):
-    """Test data_table is not updated when an update on column_info fails."""
-    engine = setup_module.engine
-    engine.execute('''
-        INSERT INTO metabase.column_info (data_table_id, column_name) VALUES
-        (1,'c_num')
-    ''')
-
-    with patch(
-            'metabase.extract_metadata.settings',
-            setup_module.mock_params):
-        extract = extract_metadata.ExtractMetadata(data_table_id=1)
-
-    with pytest.raises(psycopg2.IntegrityError):
-        extract.process_table(categorical_threshold=2)
-
-    result = engine.execute(
-        """SELECT number_rows
-        FROM metabase.data_table
-        where data_table_id = 1""").fetchall()[0][0]
-
-    assert None is result
 
 
 def test_get_column_level_metadata_column_info(
