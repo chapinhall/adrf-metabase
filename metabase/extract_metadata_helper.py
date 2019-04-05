@@ -171,10 +171,18 @@ def update_numeric(metabase_cursor, col_name, col_data, data_table_id):
 def get_numeric_metadata(col_data):
     """Get metdata from a numeric column."""
 
-    mean = statistics.mean(col_data)
-    median = statistics.median(col_data)
-    max_col = max(col_data)
-    min_col = min(col_data)
+    not_null_num_ls = [num for num in col_data if num is not None]
+
+    if not_null_num_ls:
+        mean = statistics.mean(not_null_num_ls)
+        median = statistics.median(not_null_num_ls)
+        max_col = max(not_null_num_ls)
+        min_col = min(not_null_num_ls)
+    else:
+        mean = None
+        median = None
+        max_col = None
+        min_col = None
 
     numeric_stats = namedtuple(
         'numeric_stats',
@@ -232,10 +240,18 @@ def update_text(metabase_cursor, col_name, col_data, data_table_id):
 def get_text_metadata(col_data):
     """Get metadata from a text column."""
 
-    text_lens = [len(i) for i in col_data]
-    min_len = min(text_lens)
-    max_len = max(text_lens)
-    median_len = statistics.median(text_lens)
+    not_null_text_ls = [text for text in col_data if text is not None]
+
+    if not_null_text_ls:
+        text_lens_ls = [len(text) for text in not_null_text_ls]
+        min_len = min(text_lens_ls)
+        max_len = max(text_lens_ls)
+        median_len = statistics.median(text_lens_ls)
+    else:
+        # Will only be needed if categorical_threshold = 0
+        min_len = None
+        max_len = None
+        median_len = None
 
     return (max_len, min_len, median_len)
 
