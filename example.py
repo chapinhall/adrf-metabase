@@ -42,6 +42,7 @@ full_table_name = schema_name + '.' + table_name
 # Create a text only table in the data base data.example.
 data = pd.read_csv(file_name, encoding='latin-1')
 # Convert nan to '' tempoarily for testing.
+# TODO
 data = data.replace(np.nan, '', regex=True)
 
 engine = sqlalchemy.create_engine('postgres://metaadmin@localhost/postgres')
