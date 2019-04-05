@@ -125,7 +125,7 @@ def is_code(data_cursor, col, schema_name, table_name,
 def update_numeric(metabase_cursor, col_name, col_data, data_table_id):
     """Update Column Info and Numeric Column for a numerical column."""
 
-    serial_column_id = update_column_info(metabase_cursor, col_name, 
+    serial_column_id = update_column_info(metabase_cursor, col_name,
                                           data_table_id, 'numeric')
     # TODO: Update created by, created date.
 
@@ -194,7 +194,7 @@ def get_numeric_metadata(col_data):
 def update_text(metabase_cursor, col_name, col_data, data_table_id):
     """Update Column Info  and Numeric Column for a text column."""
 
-    serial_column_id = update_column_info(metabase_cursor, col_name, 
+    serial_column_id = update_column_info(metabase_cursor, col_name,
                                           data_table_id, 'text')
     # Update created by, created date.
 
@@ -260,7 +260,7 @@ def update_date(metabase_cursor, col_name, col_data,
                 data_table_id):
     """Update Column Info and Date Column for a date column."""
 
-    serial_column_id = update_column_info(metabase_cursor, col_name, 
+    serial_column_id = update_column_info(metabase_cursor, col_name,
                                           data_table_id, 'date')
 
     (minimum, maximum) = get_date_metadata(col_data)
@@ -312,7 +312,7 @@ def update_code(metabase_cursor, col_name, col_data,
                 data_table_id):
     """Update Column Info and Code Frequency for a categorical column."""
 
-    serial_column_id = update_column_info(metabase_cursor, col_name, 
+    serial_column_id = update_column_info(metabase_cursor, col_name,
                                           data_table_id, 'code')
 
     code_counter = get_code_metadata(col_data)

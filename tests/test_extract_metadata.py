@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, patch
 import alembic.config
 from alembic.config import Config
 import pytest
-import psycopg2
 import sqlalchemy
 import testing.postgresql
 
