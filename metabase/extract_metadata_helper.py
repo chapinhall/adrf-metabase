@@ -270,7 +270,7 @@ def update_date(metabase_cursor, col_name, col_data,
     except ValueError:
         pass
 
-    serial_column_id = update_column_info(metabase_cursor, col_name, 
+    serial_column_id = update_column_info(metabase_cursor, col_name,
                                           data_table_id, 'date')
 
     (minimum, maximum) = get_date_metadata(col_data)
@@ -316,7 +316,7 @@ def get_date_metadata(col_data):
         col_data.remove(None)
     except ValueError:
         pass
-    
+
     min_date = min(col_data)
     max_date = max(col_data)
 

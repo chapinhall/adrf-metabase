@@ -295,7 +295,6 @@ def test_get_column_level_metadata_code(
         FROM metabase.code_frequency
     """).fetchall()
 
-
     assert 3 == len(results)
 
     assert 1 == results[0]['data_table_id']
@@ -321,7 +320,5 @@ def test_get_column_level_metadata_code(
     frequency_3 = results[2]['code'], results[2]['frequency']
     all_frequencies = set([frequency_1, frequency_2, frequency_3])
     expected = set([('M', 1), ('F', 2), (None, 1)])
-    
-    assert expected == all_frequencies 
 
-
+    assert expected == all_frequencies
