@@ -143,7 +143,8 @@ def setup_get_column_level_metadata(setup_module, request):
         INSERT INTO data.col_level_meta (c_num, c_text, c_code, c_date) VALUES
             (1, 'abc',   'M', '2018-01-01'),
             (2, 'efgh',  'F', '2018-02-01'),
-            (3, 'ijklm', 'F', '2018-03-02');
+            (3, 'ijklm', 'F', '2018-03-02'),
+            (NULL, NULL, NULL, NULL);
     """)
 
     def teardown_get_column_level_metadata():
@@ -295,22 +296,33 @@ def test_get_column_level_metadata_code(
         FROM metabase.code_frequency
     """).fetchall()
 
+
+    assert 3 == len(results)
+
     assert 1 == results[0]['data_table_id']
     assert 'c_code' == results[0]['column_name']
-    assert (results[0]['code'] in ('M', 'F'))
+    assert (results[0]['code'] in ('M', 'F', None))
     assert isinstance(results[0]['updated_by'], str)
     assert isinstance(results[0]['date_last_updated'], datetime.datetime)
 
     assert 1 == results[1]['data_table_id']
     assert 'c_code' == results[1]['column_name']
-    assert (results[1]['code'] in ('M', 'F'))
+    assert (results[1]['code'] in ('M', 'F', None))
     assert isinstance(results[1]['updated_by'], str)
     assert isinstance(results[1]['date_last_updated'], datetime.datetime)
 
-    # Frequencies
-    if results[0]['code'] == 'F':
-        assert results[0]['frequency'] == 2
-        assert results[1]['frequency'] == 1
-    else:
-        assert results[0]['frequency'] == 1
-        assert results[1]['frequency'] == 2
+    assert 1 == results[2]['data_table_id']
+    assert 'c_code' == results[2]['column_name']
+    assert (results[2]['code'] in ('M', 'F', None))
+    assert isinstance(results[2]['updated_by'], str)
+    assert isinstance(results[2]['date_last_updated'], datetime.datetime)
+
+    frequency_1 = results[0]['code'], results[0]['frequency']
+    frequency_2 = results[1]['code'], results[1]['frequency']
+    frequency_3 = results[2]['code'], results[2]['frequency']
+    all_frequencies = set([frequency_1, frequency_2, frequency_3])
+    expected = set([('M', 1), ('F', 2), (None, 1)])
+    
+    assert expected == all_frequencies 
+
+
