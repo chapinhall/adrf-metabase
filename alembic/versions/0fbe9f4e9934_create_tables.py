@@ -249,7 +249,6 @@ def upgrade():
         sa.Column('column_id', sa.Integer),
         sa.Column('column_name', sa.Text),
         sa.Column('code', sa.Text),
-        sa.Column('is_null', sa.Boolean),
         sa.Column('frequency', sa.Integer),
         sa.Column('created_by', sa.Text),
         sa.Column('date_created', sa.TIMESTAMP),
