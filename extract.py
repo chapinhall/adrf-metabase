@@ -1,14 +1,11 @@
-"""Example script for extracting metadata from a table.
-
-This script requires ``pandas`` package being installed and ``metabase`` schema
-being established. The latter can be done with ``alembic upgrade head``.
+"""Main script for extracting metadata from a table.
 
 This script includes some set up to handle the data receipt part of the
-metabase that has not be implemented yet including loading a csv file into a
-table in PostgreSQL and updating metabase.data_table with a new data_table_id
-and the table name (including schema). The script then extracts metadata from
-this table and updates metabase.column_info, metabase.numeric_column,
-metabase.date_columns and metabase.code_frequency as appropriate.
+metabase that has not be implemented yet including updating metabase.data_table
+with a new data_table_id and the table name (including schema). The script then
+extracts metadata from this table and updates metabase.column_info,
+metabase.numeric_column, metabase.date_columns and metabase.code_frequency
+as appropriate.
 
 The new data_table_is displayed when the script is run. Following queries in
 PostgreSQL will show the updates to the metabase:
