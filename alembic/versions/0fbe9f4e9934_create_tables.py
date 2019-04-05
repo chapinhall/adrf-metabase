@@ -190,6 +190,7 @@ def upgrade():
 
     op.create_table(
         'column_info',
+        sa.Column('column_id', sa.Integer, primary_key=True),
         sa.Column('data_table_id', sa.Integer),
         sa.Column('column_name', sa.Text),
         sa.Column('data_type', sa.Text),
@@ -202,7 +203,7 @@ def upgrade():
 
     op.create_table(
         'numeric_column',
-        sa.Column('data_table_id', sa.Integer),
+        sa.Column('column_id', sa.Integer, primary_key=True),
         sa.Column('column_name', sa.Text),
         sa.Column('minimum', sa.Integer),
         sa.Column('maximum', sa.Integer),
@@ -217,7 +218,7 @@ def upgrade():
 
     op.create_table(
         'text_column',
-        sa.Column('data_table_id', sa.Integer),
+        sa.Column('column_id', sa.Integer, primary_key=True),
         sa.Column('column_name', sa.Text),
         sa.Column('max_length', sa.Integer),
         sa.Column('min_length', sa.Integer),
@@ -231,7 +232,7 @@ def upgrade():
 
     op.create_table(
         'date_column',
-        sa.Column('data_table_id', sa.Integer),
+        sa.Column('column_id', sa.Integer, primary_key=True),
         sa.Column('column_name', sa.Text),
         sa.Column('max_date', sa.Date),
         sa.Column('min_date', sa.Date),
@@ -244,9 +245,11 @@ def upgrade():
 
     op.create_table(
         'code_frequency',
-        sa.Column('data_table_id', sa.Integer),
+        sa.Column('code_id', sa.Integer, primary_key=True),
+        sa.Column('column_id', sa.Integer),
         sa.Column('column_name', sa.Text),
         sa.Column('code', sa.Text),
+        sa.Column('is_null', sa.Boolean),
         sa.Column('frequency', sa.Integer),
         sa.Column('created_by', sa.Text),
         sa.Column('date_created', sa.TIMESTAMP),
@@ -525,13 +528,6 @@ def upgrade():
     )
 
     # Create keys on column_info.
-    op.create_primary_key(
-        'column_info_pk',
-        'column_info',
-        ['data_table_id', 'column_name'],
-        schema=SCHEMA_NAME,
-    )
-
     op.create_foreign_key(
         'column_info_data_table_fk',
         'column_info',
@@ -543,73 +539,45 @@ def upgrade():
     )
 
     # Create keys on numeric_column.
-    op.create_primary_key(
-        'numeric_column_pk',
-        'numeric_column',
-        ['data_table_id', 'column_name'],
-        schema=SCHEMA_NAME,
-    )
-
     op.create_foreign_key(
         'numeric_column_column_info_fk',
         'numeric_column',
         'column_info',
-        ['data_table_id', 'column_name'],
-        ['data_table_id', 'column_name'],
+        ['column_id'],
+        ['column_id'],
         source_schema=SCHEMA_NAME,
         referent_schema=SCHEMA_NAME,
     )
 
     # Create keys on text_columns.
-    op.create_primary_key(
-        'text_column_pk',
-        'text_column',
-        ['data_table_id', 'column_name'],
-        schema=SCHEMA_NAME
-    )
-
     op.create_foreign_key(
         'text_column_column_info_fk',
         'text_column',
         'column_info',
-        ['data_table_id', 'column_name'],
-        ['data_table_id', 'column_name'],
+        ['column_id'],
+        ['column_id'],
         source_schema=SCHEMA_NAME,
         referent_schema=SCHEMA_NAME,
     )
 
     # Create keys on date_columns.
-    op.create_primary_key(
-        'date_column_pk',
-        'date_column',
-        ['data_table_id', 'column_name'],
-        schema=SCHEMA_NAME
-    )
-
     op.create_foreign_key(
         'date_column_column_info_fk',
         'date_column',
         'column_info',
-        ['data_table_id', 'column_name'],
-        ['data_table_id', 'column_name'],
+        ['column_id'],
+        ['column_id'],
         source_schema=SCHEMA_NAME,
         referent_schema=SCHEMA_NAME,
     )
 
     # Create keys on code_frequency.
-    op.create_primary_key(
-        'code_frequency_pk',
-        'code_frequency',
-        ['data_table_id', 'column_name', 'code'],
-        schema=SCHEMA_NAME
-    )
-
     op.create_foreign_key(
         'code_frequency_column_info_fk',
         'code_frequency',
         'column_info',
-        ['data_table_id', 'column_name'],
-        ['data_table_id', 'column_name'],
+        ['column_id'],
+        ['column_id'],
         source_schema=SCHEMA_NAME,
         referent_schema=SCHEMA_NAME,
     )
