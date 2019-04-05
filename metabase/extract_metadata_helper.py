@@ -240,6 +240,11 @@ def update_text(metabase_cursor, col_name, col_data, data_table_id):
 def get_text_metadata(col_data):
     """Get metadata from a text column."""
 
+    try:
+        col_data.remove(None)
+    except ValueError:
+        pass
+
     not_null_text_ls = [text for text in col_data if text is not None]
 
     if not_null_text_ls:
@@ -259,6 +264,11 @@ def get_text_metadata(col_data):
 def update_date(metabase_cursor, col_name, col_data,
                 data_table_id):
     """Update Column Info and Date Column for a date column."""
+
+    try:
+        col_data.remove(None)
+    except ValueError:
+        pass
 
     serial_column_id = update_column_info(metabase_cursor, col_name, 
                                           data_table_id, 'date')
@@ -302,6 +312,11 @@ def update_date(metabase_cursor, col_name, col_data,
 def get_date_metadata(col_data):
     """Get metadata from a date column."""
 
+    try:
+        col_data.remove(None)
+    except ValueError:
+        pass
+    
     min_date = min(col_data)
     max_date = max(col_data)
 
