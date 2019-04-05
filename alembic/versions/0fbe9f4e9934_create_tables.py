@@ -190,6 +190,7 @@ def upgrade():
 
     op.create_table(
         'column_info',
+        sa.Column('column_id', sa.Integer, primary_key=True),
         sa.Column('data_table_id', sa.Integer),
         sa.Column('column_name', sa.Text),
         sa.Column('data_type', sa.Text),
@@ -202,12 +203,13 @@ def upgrade():
 
     op.create_table(
         'numeric_column',
+        sa.Column('column_id', sa.Integer, primary_key=True),
         sa.Column('data_table_id', sa.Integer),
         sa.Column('column_name', sa.Text),
-        sa.Column('minimum', sa.Integer),
-        sa.Column('maximum', sa.Integer),
-        sa.Column('mean', sa.Integer),
-        sa.Column('median', sa.Integer),
+        sa.Column('minimum', sa.Numeric),
+        sa.Column('maximum', sa.Numeric),
+        sa.Column('mean', sa.Numeric),
+        sa.Column('median', sa.Numeric),
         sa.Column('created_by', sa.Text),
         sa.Column('date_created', sa.TIMESTAMP),
         sa.Column('updated_by', sa.Text),
@@ -217,6 +219,7 @@ def upgrade():
 
     op.create_table(
         'text_column',
+        sa.Column('column_id', sa.Integer, primary_key=True),
         sa.Column('data_table_id', sa.Integer),
         sa.Column('column_name', sa.Text),
         sa.Column('max_length', sa.Integer),
@@ -231,6 +234,7 @@ def upgrade():
 
     op.create_table(
         'date_column',
+        sa.Column('column_id', sa.Integer, primary_key=True),
         sa.Column('data_table_id', sa.Integer),
         sa.Column('column_name', sa.Text),
         sa.Column('max_date', sa.Date),
@@ -244,7 +248,9 @@ def upgrade():
 
     op.create_table(
         'code_frequency',
+        sa.Column('code_id', sa.Integer, primary_key=True),
         sa.Column('data_table_id', sa.Integer),
+        sa.Column('column_id', sa.Integer),
         sa.Column('column_name', sa.Text),
         sa.Column('code', sa.Text),
         sa.Column('frequency', sa.Integer),
@@ -525,13 +531,6 @@ def upgrade():
     )
 
     # Create keys on column_info.
-    op.create_primary_key(
-        'column_info_pk',
-        'column_info',
-        ['data_table_id', 'column_name'],
-        schema=SCHEMA_NAME,
-    )
-
     op.create_foreign_key(
         'column_info_data_table_fk',
         'column_info',
@@ -543,73 +542,85 @@ def upgrade():
     )
 
     # Create keys on numeric_column.
-    op.create_primary_key(
-        'numeric_column_pk',
-        'numeric_column',
-        ['data_table_id', 'column_name'],
-        schema=SCHEMA_NAME,
-    )
-
     op.create_foreign_key(
         'numeric_column_column_info_fk',
         'numeric_column',
         'column_info',
-        ['data_table_id', 'column_name'],
-        ['data_table_id', 'column_name'],
+        ['column_id'],
+        ['column_id'],
+        source_schema=SCHEMA_NAME,
+        referent_schema=SCHEMA_NAME,
+    )
+
+    op.create_foreign_key(
+        'numeric_column_data_table_fk',
+        'numeric_column',
+        'data_table',
+        ['data_table_id'],
+        ['data_table_id'],
         source_schema=SCHEMA_NAME,
         referent_schema=SCHEMA_NAME,
     )
 
     # Create keys on text_columns.
-    op.create_primary_key(
-        'text_column_pk',
-        'text_column',
-        ['data_table_id', 'column_name'],
-        schema=SCHEMA_NAME
-    )
-
     op.create_foreign_key(
         'text_column_column_info_fk',
         'text_column',
         'column_info',
-        ['data_table_id', 'column_name'],
-        ['data_table_id', 'column_name'],
+        ['column_id'],
+        ['column_id'],
+        source_schema=SCHEMA_NAME,
+        referent_schema=SCHEMA_NAME,
+    )
+
+    op.create_foreign_key(
+        'text_column_data_table_fk',
+        'text_column',
+        'data_table',
+        ['data_table_id'],
+        ['data_table_id'],
         source_schema=SCHEMA_NAME,
         referent_schema=SCHEMA_NAME,
     )
 
     # Create keys on date_columns.
-    op.create_primary_key(
-        'date_column_pk',
-        'date_column',
-        ['data_table_id', 'column_name'],
-        schema=SCHEMA_NAME
-    )
-
     op.create_foreign_key(
         'date_column_column_info_fk',
         'date_column',
         'column_info',
-        ['data_table_id', 'column_name'],
-        ['data_table_id', 'column_name'],
+        ['column_id'],
+        ['column_id'],
+        source_schema=SCHEMA_NAME,
+        referent_schema=SCHEMA_NAME,
+    )
+
+    op.create_foreign_key(
+        'date_column_data_table_fk',
+        'date_column',
+        'data_table',
+        ['data_table_id'],
+        ['data_table_id'],
         source_schema=SCHEMA_NAME,
         referent_schema=SCHEMA_NAME,
     )
 
     # Create keys on code_frequency.
-    op.create_primary_key(
-        'code_frequency_pk',
-        'code_frequency',
-        ['data_table_id', 'column_name', 'code'],
-        schema=SCHEMA_NAME
-    )
-
     op.create_foreign_key(
         'code_frequency_column_info_fk',
         'code_frequency',
         'column_info',
-        ['data_table_id', 'column_name'],
-        ['data_table_id', 'column_name'],
+        ['column_id'],
+        ['column_id'],
+        source_schema=SCHEMA_NAME,
+        referent_schema=SCHEMA_NAME,
+    )
+
+    op.create_foreign_key(
+        'code_frequency_data_table_fk',
+        'code_frequency',
+        'data_table',
+        ['data_table_id'],
+        ['data_table_id'],
         source_schema=SCHEMA_NAME,
         referent_schema=SCHEMA_NAME,
     )
@@ -795,6 +806,30 @@ def downgrade():
     op.drop_constraint(
         'column_info_data_table_fk',
         'column_info',
+        schema=SCHEMA_NAME,
+    )
+
+    op.drop_constraint(
+        'numeric_column_data_table_fk',
+        'numeric_column',
+        schema=SCHEMA_NAME,
+    )
+
+    op.drop_constraint(
+        'text_column_data_table_fk',
+        'text_column',
+        schema=SCHEMA_NAME,
+    )
+
+    op.drop_constraint(
+        'date_column_data_table_fk',
+        'date_column',
+        schema=SCHEMA_NAME,
+    )
+
+    op.drop_constraint(
+        'code_frequency_data_table_fk',
+        'code_frequency',
         schema=SCHEMA_NAME,
     )
 

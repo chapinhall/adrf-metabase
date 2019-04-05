@@ -125,37 +125,38 @@ def is_code(data_cursor, col, schema_name, table_name,
 def update_numeric(metabase_cursor, col_name, col_data, data_table_id):
     """Update Column Info and Numeric Column for a numerical column."""
 
-    update_column_info(metabase_cursor, col_name, data_table_id, 'numeric')
-    # Update created by, created date.
+    serial_column_id = update_column_info(metabase_cursor, col_name,
+                                          data_table_id, 'numeric')
+    # TODO: Update created by, created date.
 
     numeric_stats = get_numeric_metadata(col_data)
 
     metabase_cursor.execute(
         """
-        INSERT INTO metabase.numeric_column
-        (
-        data_table_id,
-        column_name,
-        minimum,
-        maximum,
-        mean,
-        median,
-        updated_by,
-        date_last_updated
-        )
-        VALUES
-        (
-        %(data_table_id)s,
-        %(column_name)s,
-        %(minimum)s,
-        %(maximum)s,
-        %(mean)s,
-        %(median)s,
-        %(updated_by)s,
-        (SELECT CURRENT_TIMESTAMP)
+        INSERT INTO metabase.numeric_column (
+            column_id,
+            data_table_id,
+            column_name,
+            minimum,
+            maximum,
+            mean,
+            median,
+            updated_by,
+            date_last_updated
+        ) VALUES (
+            %(column_id)s,
+            %(data_table_id)s,
+            %(column_name)s,
+            %(minimum)s,
+            %(maximum)s,
+            %(mean)s,
+            %(median)s,
+            %(updated_by)s,
+            (SELECT CURRENT_TIMESTAMP)
         )
         """,
         {
+            'column_id': serial_column_id,
             'data_table_id': data_table_id,
             'column_name': col_name,
             'minimum': numeric_stats.min,
@@ -170,10 +171,18 @@ def update_numeric(metabase_cursor, col_name, col_data, data_table_id):
 def get_numeric_metadata(col_data):
     """Get metdata from a numeric column."""
 
-    mean = statistics.mean(col_data)
-    median = statistics.median(col_data)
-    max_col = max(col_data)
-    min_col = min(col_data)
+    not_null_num_ls = [num for num in col_data if num is not None]
+
+    if not_null_num_ls:
+        mean = statistics.mean(not_null_num_ls)
+        median = statistics.median(not_null_num_ls)
+        max_col = max(not_null_num_ls)
+        min_col = min(not_null_num_ls)
+    else:
+        mean = None
+        median = None
+        max_col = None
+        min_col = None
 
     numeric_stats = namedtuple(
         'numeric_stats',
@@ -185,7 +194,8 @@ def get_numeric_metadata(col_data):
 def update_text(metabase_cursor, col_name, col_data, data_table_id):
     """Update Column Info  and Numeric Column for a text column."""
 
-    update_column_info(metabase_cursor, col_name, data_table_id, 'text')
+    serial_column_id = update_column_info(metabase_cursor, col_name,
+                                          data_table_id, 'text')
     # Update created by, created date.
 
     (max_len, min_len, median_len) = get_text_metadata(col_data)
@@ -194,6 +204,7 @@ def update_text(metabase_cursor, col_name, col_data, data_table_id):
         """
         INSERT INTO metabase.text_column
         (
+        column_id,
         data_table_id,
         column_name,
         max_length,
@@ -204,6 +215,7 @@ def update_text(metabase_cursor, col_name, col_data, data_table_id):
         )
         VALUES
         (
+        %(column_id)s,
         %(data_table_id)s,
         %(column_name)s,
         %(max_length)s,
@@ -214,6 +226,7 @@ def update_text(metabase_cursor, col_name, col_data, data_table_id):
         )
         """,
         {
+            'column_id': serial_column_id,
             'data_table_id': data_table_id,
             'column_name': col_name,
             'max_length': max_len,
@@ -227,10 +240,23 @@ def update_text(metabase_cursor, col_name, col_data, data_table_id):
 def get_text_metadata(col_data):
     """Get metadata from a text column."""
 
-    text_lens = [len(i) for i in col_data]
-    min_len = min(text_lens)
-    max_len = max(text_lens)
-    median_len = statistics.median(text_lens)
+    try:
+        col_data.remove(None)
+    except ValueError:
+        pass
+
+    not_null_text_ls = [text for text in col_data if text is not None]
+
+    if not_null_text_ls:
+        text_lens_ls = [len(text) for text in not_null_text_ls]
+        min_len = min(text_lens_ls)
+        max_len = max(text_lens_ls)
+        median_len = statistics.median(text_lens_ls)
+    else:
+        # Will only be needed if categorical_threshold = 0
+        min_len = None
+        max_len = None
+        median_len = None
 
     return (max_len, min_len, median_len)
 
@@ -239,7 +265,13 @@ def update_date(metabase_cursor, col_name, col_data,
                 data_table_id):
     """Update Column Info and Date Column for a date column."""
 
-    update_column_info(metabase_cursor, col_name, data_table_id, 'date')
+    try:
+        col_data.remove(None)
+    except ValueError:
+        pass
+
+    serial_column_id = update_column_info(metabase_cursor, col_name,
+                                          data_table_id, 'date')
 
     (minimum, maximum) = get_date_metadata(col_data)
 
@@ -247,6 +279,7 @@ def update_date(metabase_cursor, col_name, col_data,
         """
         INSERT INTO metabase.date_column
         (
+        column_id,
         data_table_id,
         column_name,
         min_date,
@@ -256,6 +289,7 @@ def update_date(metabase_cursor, col_name, col_data,
         )
         VALUES
         (
+        %(column_id)s,
         %(data_table_id)s,
         %(column_name)s,
         %(min_date)s,
@@ -265,6 +299,7 @@ def update_date(metabase_cursor, col_name, col_data,
         )
         """,
         {
+            'column_id': serial_column_id,
             'data_table_id': data_table_id,
             'column_name': col_name,
             'min_date': minimum,
@@ -277,6 +312,11 @@ def update_date(metabase_cursor, col_name, col_data,
 def get_date_metadata(col_data):
     """Get metadata from a date column."""
 
+    try:
+        col_data.remove(None)
+    except ValueError:
+        pass
+
     min_date = min(col_data)
     max_date = max(col_data)
 
@@ -287,7 +327,8 @@ def update_code(metabase_cursor, col_name, col_data,
                 data_table_id):
     """Update Column Info and Code Frequency for a categorical column."""
 
-    update_column_info(metabase_cursor, col_name, data_table_id, 'code')
+    serial_column_id = update_column_info(metabase_cursor, col_name,
+                                          data_table_id, 'code')
 
     code_counter = get_code_metadata(col_data)
 
@@ -295,23 +336,25 @@ def update_code(metabase_cursor, col_name, col_data,
         metabase_cursor.execute(
             """
             INSERT INTO metabase.code_frequency (
+                column_id,
                 data_table_id,
                 column_name,
                 code,
                 frequency,
                 updated_by,
                 date_last_updated
-            ) VALUES
-            (
-               %(data_table_id)s,
-               %(column_name)s,
-               %(code)s,
-               %(frequency)s,
-               %(updated_by)s,
+            ) VALUES (
+                %(column_id)s,
+                %(data_table_id)s,
+                %(column_name)s,
+                %(code)s,
+                %(frequency)s,
+                %(updated_by)s,
                (SELECT CURRENT_TIMESTAMP)
             )
             """,
             {
+                'column_id': serial_column_id,
                 'data_table_id': data_table_id,
                 'column_name': col_name,
                 'code': code,
@@ -336,21 +379,22 @@ def update_column_info(cursor, col_name, data_table_id, data_type):
     # Create Column Info entry
     cursor.execute(
         """
-        INSERT INTO metabase.column_info
-        (data_table_id,
-        column_name,
-        data_type,
-        updated_by,
-        date_last_updated
+        INSERT INTO metabase.column_info (
+            data_table_id,
+            column_name,
+            data_type,
+            updated_by,
+            date_last_updated
         )
-        VALUES
-        (
-        %(data_table_id)s,
-        %(column_name)s,
-        %(data_type)s,
-        %(updated_by)s,
-        (SELECT CURRENT_TIMESTAMP)
+        VALUES (
+            %(data_table_id)s,
+            %(column_name)s,
+            %(data_type)s,
+            %(updated_by)s,
+            (SELECT CURRENT_TIMESTAMP)
         )
+        RETURNING column_id
+        ;
         """,
         {
             'data_table_id': data_table_id,
@@ -359,3 +403,6 @@ def update_column_info(cursor, col_name, data_table_id, data_type):
             'updated_by': getpass.getuser(),
         }
     )
+
+    serial_column_id = cursor.fetchall()[0][0]
+    return serial_column_id

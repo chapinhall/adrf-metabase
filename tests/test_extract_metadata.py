@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, patch
 import alembic.config
 from alembic.config import Config
 import pytest
-import psycopg2
 import sqlalchemy
 import testing.postgresql
 
@@ -82,7 +81,11 @@ def setup_module(request):
     )
 
 
-#   Tests for `_process_table()`
+# #############################################################################
+#   Test functions
+# #############################################################################
+
+#   Tests for `process_table()`
 # =========================================================================
 
 @pytest.fixture
@@ -100,18 +103,16 @@ def setup_empty_table(setup_module, request):
             (c_num INT, c_text TEXT, c_code TEXT, c_date DATE);
     """)
 
-    def teardown_get_column_level_metadata():
+    def teardown_empty_table():
         engine.execute("""
             TRUNCATE TABLE metabase.data_table CASCADE;
             DROP TABLE data.col_level_meta;
         """)
 
-    request.addfinalizer(teardown_get_column_level_metadata)
+    request.addfinalizer(teardown_empty_table)
 
 
-def test_empty_table(
-        setup_module,
-        setup_empty_table):
+def test_empty_table(setup_module, setup_empty_table):
     """Test extracting column level metadata from an empy table."""
 
     with patch(
@@ -141,7 +142,8 @@ def setup_get_column_level_metadata(setup_module, request):
         INSERT INTO data.col_level_meta (c_num, c_text, c_code, c_date) VALUES
             (1, 'abc',   'M', '2018-01-01'),
             (2, 'efgh',  'F', '2018-02-01'),
-            (3, 'ijklm', 'F', '2018-03-02');
+            (3, 'ijklm', 'F', '2018-03-02'),
+            (NULL, NULL, NULL, NULL);
     """)
 
     def teardown_get_column_level_metadata():
@@ -151,32 +153,6 @@ def setup_get_column_level_metadata(setup_module, request):
         """)
 
     request.addfinalizer(teardown_get_column_level_metadata)
-
-
-def test_rollback(
-        setup_module,
-        setup_get_column_level_metadata):
-    """Test data_table is not updated when an update on column_info fails."""
-    engine = setup_module.engine
-    engine.execute('''
-        INSERT INTO metabase.column_info (data_table_id, column_name) VALUES
-        (1,'c_num')
-    ''')
-
-    with patch(
-            'metabase.extract_metadata.settings',
-            setup_module.mock_params):
-        extract = extract_metadata.ExtractMetadata(data_table_id=1)
-
-    with pytest.raises(psycopg2.IntegrityError):
-        extract.process_table(categorical_threshold=2)
-
-    result = engine.execute(
-        """SELECT number_rows
-        FROM metabase.data_table
-        where data_table_id = 1""").fetchall()[0][0]
-
-    assert None is result
 
 
 def test_get_column_level_metadata_column_info(
@@ -319,22 +295,30 @@ def test_get_column_level_metadata_code(
         FROM metabase.code_frequency
     """).fetchall()
 
+    assert 3 == len(results)
+
     assert 1 == results[0]['data_table_id']
     assert 'c_code' == results[0]['column_name']
-    assert (results[0]['code'] in ('M', 'F'))
+    assert (results[0]['code'] in ('M', 'F', None))
     assert isinstance(results[0]['updated_by'], str)
     assert isinstance(results[0]['date_last_updated'], datetime.datetime)
 
     assert 1 == results[1]['data_table_id']
     assert 'c_code' == results[1]['column_name']
-    assert (results[1]['code'] in ('M', 'F'))
+    assert (results[1]['code'] in ('M', 'F', None))
     assert isinstance(results[1]['updated_by'], str)
     assert isinstance(results[1]['date_last_updated'], datetime.datetime)
 
-    # Frequencies
-    if results[0]['code'] == 'F':
-        assert results[0]['frequency'] == 2
-        assert results[1]['frequency'] == 1
-    else:
-        assert results[0]['frequency'] == 1
-        assert results[1]['frequency'] == 2
+    assert 1 == results[2]['data_table_id']
+    assert 'c_code' == results[2]['column_name']
+    assert (results[2]['code'] in ('M', 'F', None))
+    assert isinstance(results[2]['updated_by'], str)
+    assert isinstance(results[2]['date_last_updated'], datetime.datetime)
+
+    frequency_1 = results[0]['code'], results[0]['frequency']
+    frequency_2 = results[1]['code'], results[1]['frequency']
+    frequency_3 = results[2]['code'], results[2]['frequency']
+    all_frequencies = set([frequency_1, frequency_2, frequency_3])
+    expected = set([('M', 1), ('F', 2), (None, 1)])
+
+    assert expected == all_frequencies
