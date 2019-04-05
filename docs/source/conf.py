@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 # -- Project information -----------------------------------------------------
 
 project = 'ADRF Metabase'
-copyright = '2019, Coleridge Initiative'
+# copyright = '2019, Coleridge Initiative'
 author = 'Molly Rossow and Shen Han'
 
 # The short X.Y version

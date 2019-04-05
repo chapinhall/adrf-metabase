@@ -1,14 +1,11 @@
-"""Example script for extracting metadata from a table.
-
-This script requires ``pandas`` package being installed and ``metabase`` schema
-being established. The latter can be done with ``alembic upgrade head``.
+"""Main script for extracting metadata from a table.
 
 This script includes some set up to handle the data receipt part of the
-metabase that has not be implemented yet including loading a csv file into a
-table in PostgreSQL and updating metabase.data_table with a new data_table_id
-and the table name (including schema). The script then extracts metadata from
-this table and updates metabase.column_info, metabase.numeric_column,
-metabase.date_columns and metabase.code_frequency as appropriate.
+metabase that has not be implemented yet including updating metabase.data_table
+with a new data_table_id and the table name (including schema). The script then
+extracts metadata from this table and updates metabase.column_info,
+metabase.numeric_column, metabase.date_columns and metabase.code_frequency
+as appropriate.
 
 The new data_table_is displayed when the script is run. Following queries in
 PostgreSQL will show the updates to the metabase:
@@ -21,32 +18,33 @@ select * from metabase.code_frequency where data_table_id = <data_table_id>;
 
 """
 
-import pandas as pd
+import argparse
+
 import sqlalchemy
 
 from metabase import extract_metadata
 
 
-############################################
-# Change here.
-############################################
-file_name = 'data.csv'
-schema_name = 'data'    # Must specify a schema.
-table_name = 'example'
-categorical_threshold = 5
-############################################
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    '-s', '--schema', type=str, required=True,
+    help='Schema name of the data')
+parser.add_argument(
+    '-t', '--table', type=str, required=True,
+    help='Table name of the data')
+parser.add_argument(
+    '-c', '--categorical', type=int, default=10,
+    help='Max number of distinct values in all categorical columns')
+
+args = parser.parse_args()
+schema_name = args.schema
+table_name = args.table
+categorical_threshold = args.categorical
 
 full_table_name = schema_name + '.' + table_name
 
-# Create a text only table in the data base data.example.
-data = pd.read_csv(file_name)
 engine = sqlalchemy.create_engine('postgres://metaadmin@localhost/postgres')
-conn = engine.connect()
-data.to_sql(
-    table_name, conn,
-    if_exists='replace',
-    index=False,
-    schema=schema_name)
 
 # Update meatabase.data_table with this new table.
 max_id = engine.execute(

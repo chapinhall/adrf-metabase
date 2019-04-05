@@ -1,7 +1,9 @@
 """Helper funtions for extract_metadata.
 """
 
+from collections import namedtuple, Counter
 import getpass
+import statistics
 
 import psycopg2
 from psycopg2 import sql
@@ -9,43 +11,41 @@ from psycopg2 import sql
 
 def get_column_type(data_cursor, col, categorical_threshold, schema_name,
                     table_name):
-    """Return the column type."""
+    """Return the column type and the contents of the column."""
 
-    if is_numeric(data_cursor, col, schema_name, table_name):
-        return 'numeric'
-    elif is_date(data_cursor, col, schema_name, table_name):
-        return 'date'
-    elif is_code(data_cursor, col, schema_name, table_name,
-                 categorical_threshold):
-        return 'code'
+    col_type = ''
+    data = []
+
+    numeric_flag, numeric_data = is_numeric(data_cursor, col, schema_name,
+                                            table_name)
+    date_flag, date_data = is_date(data_cursor, col, schema_name, table_name)
+    code_flag, code_data = is_code(data_cursor, col, schema_name, table_name,
+                                   categorical_threshold)
+
+    if numeric_flag:
+        col_type = 'numeric'
+        data = numeric_data
+    elif date_flag:
+        col_type = 'date'
+        data = date_data
+    elif code_flag:
+        col_type = 'code'
+        data = code_data
     else:
-        # is_code creates a column in the temporary table
-        # metadata.converted_data with type text and the a copy of col. is_copy
-        # must be run before assigning type as text.
-        return 'text'
+        col_type = 'text'
+        data = code_data  # If is_code is False, column assumed to be text.
+
+    column_data = namedtuple('column_data', ['type', 'data'])
+    return column_data(col_type, data)
 
 
 def is_numeric(data_cursor, col, schema_name, table_name):
-    """Return True if column is numeric.
-
-    Return True if column is numeric. Converts text column to numeric and
-    stores it in temporary table metabase.converted_data.
-
+    """Return True and contents of column if column is numeric.
     """
-
-    # Create temporary table for storing converted data.
-    data_cursor.execute(
-        """
-        CREATE TEMPORARY TABLE IF NOT EXISTS
-        converted_data
-        (data_col NUMERIC)
-        """
-    )
 
     try:
         data_cursor.execute(
             sql.SQL("""
-            INSERT INTO converted_data (data_col)
             SELECT {}::NUMERIC FROM {}.{}
             """).format(
                 sql.Identifier(col),
@@ -53,34 +53,23 @@ def is_numeric(data_cursor, col, schema_name, table_name):
                 sql.Identifier(table_name),
             )
         )
-        return True
+        data = [i[0] for i in data_cursor.fetchall()]
+        flag = True
     except (psycopg2.ProgrammingError, psycopg2.DataError):
         data_cursor.execute('DROP TABLE IF EXISTS converted_data')
-        return False
+        data = []
+        flag = False
+
+    return flag, data
 
 
 def is_date(data_cursor, col, schema_name, table_name):
-    """Return True if column is date.
-
-    Return True if column is type date. Converts text column to date and stores
-    it in temporary table metabase.converted_data.
-
+    """Return True and contents of column if column is date.
     """
-
-    # Create temporary table for storing converted data.
-    data_cursor.execute(
-        """
-        CREATE TEMPORARY TABLE IF NOT EXISTS
-        converted_data
-        (data_col DATE);
-        TRUNCATE TABLE converted_data;
-        """
-    )
 
     try:
         data_cursor.execute(
             sql.SQL("""
-            INSERT INTO converted_data (data_col)
             SELECT {}::DATE FROM {}.{}
             """).format(
                 sql.Identifier(col),
@@ -88,32 +77,20 @@ def is_date(data_cursor, col, schema_name, table_name):
                 sql.Identifier(table_name),
             )
         )
-        return True
+        data = [i[0] for i in data_cursor.fetchall()]
+        flag = True
     except (psycopg2.ProgrammingError, psycopg2.DataError):
         data_cursor.execute("DROP TABLE IF EXISTS converted_data")
-        return False
+        data = []
+        flag = False
+
+    return flag, data
 
 
 def is_code(data_cursor, col, schema_name, table_name,
             categorical_threshold):
-    """Return True if column is categorical.
-
-    Return True if column categorical. Stores a copy of the column in
-    metabase.converted_data. Note: Even if the column is not categorical, the
-    column is copied to metadata.converted_metadata as a text column and the
-    column will be assumed to be text.
-
+    """Return True and contents of column if column is categorical.
     """
-
-    # Create temporary table for storing converted data.
-    data_cursor.execute(
-        """
-        CREATE TEMPORARY TABLE IF NOT EXISTS
-        converted_data
-        (data_col TEXT);
-        TRUNCATE TABLE converted_data;
-        """
-    )
 
     data_cursor.execute(
         sql.SQL(
@@ -128,7 +105,6 @@ def is_code(data_cursor, col, schema_name, table_name,
     n_distinct = data_cursor.fetchall()[0][0]
 
     data_cursor.execute(sql.SQL("""
-        INSERT INTO converted_data (data_col)
         SELECT {} FROM {}.{}
         """).format(
                 sql.Identifier(col),
@@ -136,90 +112,99 @@ def is_code(data_cursor, col, schema_name, table_name,
                 sql.Identifier(table_name),
         )
         )
+    data = [i[0] for i in data_cursor.fetchall()]
 
     if n_distinct <= categorical_threshold:
-        return True
+        flag = True
     else:
-        return False
+        flag = False
+
+    return flag, data
 
 
-def update_numeric(data_cursor, metabase_cursor, col, data_table_id):
-    """Update Column Info  and Numeric Column for a numerical column."""
+def update_numeric(metabase_cursor, col_name, col_data, data_table_id):
+    """Update Column Info and Numeric Column for a numerical column."""
 
-    update_column_info(metabase_cursor, col, data_table_id, 'numeric')
-    # Update created by, created date.
+    serial_column_id = update_column_info(metabase_cursor, col_name,
+                                          data_table_id, 'numeric')
+    # TODO: Update created by, created date.
 
-    (minimum, maximum, mean, median) = get_numeric_metadata(data_cursor, col,
-                                                            data_table_id)
+    numeric_stats = get_numeric_metadata(col_data)
 
     metabase_cursor.execute(
         """
-        INSERT INTO metabase.numeric_column
-        (
-        data_table_id,
-        column_name,
-        minimum,
-        maximum,
-        mean,
-        median,
-        updated_by,
-        date_last_updated
-        )
-        VALUES
-        (
-        %(data_table_id)s,
-        %(column_name)s,
-        %(minimum)s,
-        %(maximum)s,
-        %(mean)s,
-        %(median)s,
-        %(updated_by)s,
-        (SELECT CURRENT_TIMESTAMP)
+        INSERT INTO metabase.numeric_column (
+            column_id,
+            data_table_id,
+            column_name,
+            minimum,
+            maximum,
+            mean,
+            median,
+            updated_by,
+            date_last_updated
+        ) VALUES (
+            %(column_id)s,
+            %(data_table_id)s,
+            %(column_name)s,
+            %(minimum)s,
+            %(maximum)s,
+            %(mean)s,
+            %(median)s,
+            %(updated_by)s,
+            (SELECT CURRENT_TIMESTAMP)
         )
         """,
         {
+            'column_id': serial_column_id,
             'data_table_id': data_table_id,
-            'column_name': col,
-            'minimum': minimum,
-            'maximum': maximum,
-            'mean': mean,
-            'median': median,
+            'column_name': col_name,
+            'minimum': numeric_stats.min,
+            'maximum': numeric_stats.max,
+            'mean': numeric_stats.mean,
+            'median': numeric_stats.median,
             'updated_by': getpass.getuser(),
         }
     )
 
 
-def get_numeric_metadata(data_cursor, col, data_table_id):
+def get_numeric_metadata(col_data):
     """Get metdata from a numeric column."""
 
-    data_cursor.execute(
-        """
-        SELECT
-        min(data_col),
-        max(data_col),
-        avg(data_col),
-        PERCENTILE_CONT(0.5)
-            WITHIN GROUP (ORDER BY data_col)
-        FROM converted_data
-        """
+    not_null_num_ls = [num for num in col_data if num is not None]
+
+    if not_null_num_ls:
+        mean = statistics.mean(not_null_num_ls)
+        median = statistics.median(not_null_num_ls)
+        max_col = max(not_null_num_ls)
+        min_col = min(not_null_num_ls)
+    else:
+        mean = None
+        median = None
+        max_col = None
+        min_col = None
+
+    numeric_stats = namedtuple(
+        'numeric_stats',
+        ['min', 'max', 'mean', 'median'],
     )
+    return numeric_stats(min_col, max_col, mean, median)
 
-    return data_cursor.fetchall()[0]
 
+def update_text(metabase_cursor, col_name, col_data, data_table_id):
+    """Update Column Info  and Numeric Column for a text column."""
 
-def update_text(data_cursor, metabase_cursor, col, data_table_id):
-    """Update Column Info  and Numeric Column for a numerical column."""
-
-    update_column_info(metabase_cursor, col, data_table_id, 'text')
+    serial_column_id = update_column_info(metabase_cursor, col_name,
+                                          data_table_id, 'text')
     # Update created by, created date.
 
-    (max_len, min_len, median_len) = get_text_metadata(data_cursor, col,
-                                                       data_table_id)
+    (max_len, min_len, median_len) = get_text_metadata(col_data)
 
     metabase_cursor.execute(
         """
         INSERT INTO metabase.text_column
         (
+        column_id,
         data_table_id,
         column_name,
         max_length,
@@ -230,6 +215,7 @@ def update_text(data_cursor, metabase_cursor, col, data_table_id):
         )
         VALUES
         (
+        %(column_id)s,
         %(data_table_id)s,
         %(column_name)s,
         %(max_length)s,
@@ -240,8 +226,9 @@ def update_text(data_cursor, metabase_cursor, col, data_table_id):
         )
         """,
         {
+            'column_id': serial_column_id,
             'data_table_id': data_table_id,
-            'column_name': col,
+            'column_name': col_name,
             'max_length': max_len,
             'min_length': min_len,
             'median_length': median_len,
@@ -250,48 +237,49 @@ def update_text(data_cursor, metabase_cursor, col, data_table_id):
     )
 
 
-def get_text_metadata(data_cursor, col, data_table_id):
+def get_text_metadata(col_data):
     """Get metadata from a text column."""
 
-    # Create tempory table to hold text lengths.
-    data_cursor.execute(
-        """
-        CREATE TEMPORARY TABLE text_length
-        AS
-        SELECT char_length(data_col)
-        FROM converted_data
-        """
-    )
+    try:
+        col_data.remove(None)
+    except ValueError:
+        pass
 
-    data_cursor.execute(
-        """
-        SELECT
-        MAX(text_length.char_length),
-        MIN(text_length.char_length),
-        PERCENTILE_CONT(0.5)
-            WITHIN GROUP (ORDER BY text_length.char_length)
-        FROM text_length;
-        """
-    )
+    not_null_text_ls = [text for text in col_data if text is not None]
 
-    (max_len, min_len, median_len) = data_cursor.fetchall()[0]
-
-    data_cursor.execute("DROP TABLE text_length")
+    if not_null_text_ls:
+        text_lens_ls = [len(text) for text in not_null_text_ls]
+        min_len = min(text_lens_ls)
+        max_len = max(text_lens_ls)
+        median_len = statistics.median(text_lens_ls)
+    else:
+        # Will only be needed if categorical_threshold = 0
+        min_len = None
+        max_len = None
+        median_len = None
 
     return (max_len, min_len, median_len)
 
 
-def update_date(data_cursor, metabase_cursor, col, data_table_id):
+def update_date(metabase_cursor, col_name, col_data,
+                data_table_id):
     """Update Column Info and Date Column for a date column."""
 
-    update_column_info(metabase_cursor, col, data_table_id, 'date')
+    try:
+        col_data.remove(None)
+    except ValueError:
+        pass
 
-    (minimum, maximum) = get_date_metadata(data_cursor, col, data_table_id)
+    serial_column_id = update_column_info(metabase_cursor, col_name,
+                                          data_table_id, 'date')
+
+    (minimum, maximum) = get_date_metadata(col_data)
 
     metabase_cursor.execute(
         """
         INSERT INTO metabase.date_column
         (
+        column_id,
         data_table_id,
         column_name,
         min_date,
@@ -301,6 +289,7 @@ def update_date(data_cursor, metabase_cursor, col, data_table_id):
         )
         VALUES
         (
+        %(column_id)s,
         %(data_table_id)s,
         %(column_name)s,
         %(min_date)s,
@@ -310,8 +299,9 @@ def update_date(data_cursor, metabase_cursor, col, data_table_id):
         )
         """,
         {
+            'column_id': serial_column_id,
             'data_table_id': data_table_id,
-            'column_name': col,
+            'column_name': col_name,
             'min_date': minimum,
             'max_date': maximum,
             'updated_by': getpass.getuser(),
@@ -319,80 +309,69 @@ def update_date(data_cursor, metabase_cursor, col, data_table_id):
         )
 
 
-def get_date_metadata(data_cursor, col, data_table_id):
+def get_date_metadata(col_data):
     """Get metadata from a date column."""
 
-    data_cursor.execute(
-        """
-        SELECT
-        min(data_col),
-        max(data_col)
-        FROM converted_data
-        """
-    )
+    try:
+        col_data.remove(None)
+    except ValueError:
+        pass
 
-    return data_cursor.fetchall()[0]
+    min_date = min(col_data)
+    max_date = max(col_data)
+
+    return (min_date, max_date)
 
 
-def update_code(data_cursor, metabase_cursor, col, data_table_id):
+def update_code(metabase_cursor, col_name, col_data,
+                data_table_id):
     """Update Column Info and Code Frequency for a categorical column."""
 
-    update_column_info(metabase_cursor, col, data_table_id, 'code')
+    serial_column_id = update_column_info(metabase_cursor, col_name,
+                                          data_table_id, 'code')
 
-    code_freq_tp_ls = get_code_metadata(data_cursor, col, data_table_id)
+    code_counter = get_code_metadata(col_data)
 
-    metabase_cursor.execute(
-        'CREATE TEMPORARY TABLE code_freq_temp (code TEXT, freq INT);')
-
-    for code, freq in code_freq_tp_ls:
+    for code, frequency in code_counter.items():
         metabase_cursor.execute(
-            'INSERT INTO code_freq_temp (code, freq) VALUES (%s, %s);',
-            [code, freq],
+            """
+            INSERT INTO metabase.code_frequency (
+                column_id,
+                data_table_id,
+                column_name,
+                code,
+                frequency,
+                updated_by,
+                date_last_updated
+            ) VALUES (
+                %(column_id)s,
+                %(data_table_id)s,
+                %(column_name)s,
+                %(code)s,
+                %(frequency)s,
+                %(updated_by)s,
+               (SELECT CURRENT_TIMESTAMP)
+            )
+            """,
+            {
+                'column_id': serial_column_id,
+                'data_table_id': data_table_id,
+                'column_name': col_name,
+                'code': code,
+                'frequency': frequency,
+                'updated_by': getpass.getuser(),
+            },
         )
 
-    metabase_cursor.execute(
-        """
-        INSERT INTO metabase.code_frequency (
-            data_table_id,
-            column_name,
-            code,
-            frequency,
-            updated_by,
-            date_last_updated
-        ) SELECT
-            %(data_table_id)s,
-            %(column_name)s,
-            code,
-            freq,
-            %(updated_by)s,
-            CURRENT_TIMESTAMP
-        FROM code_freq_temp;
-        """,
-        {
-            'data_table_id': data_table_id,
-            'column_name': col,
-            'updated_by': getpass.getuser(),
-        },
-    )
 
-    metabase_cursor.execute('DROP TABLE code_freq_temp;')
+def get_code_metadata(col_data):
+
+    code_frequecy_counter = Counter(col_data)
+
+    return code_frequecy_counter
 
 
-def get_code_metadata(data_cursor, col, data_table_id):
-    data_cursor.execute(
-        """
-        SELECT data_col AS code, COUNT(*) AS frequency
-        FROM converted_data
-        GROUP BY data_col
-        ORDER BY data_col;
-        """
-    )
-    code_frequency_tp_ls = data_cursor.fetchall()
-
-    return code_frequency_tp_ls
-
-
-def update_column_info(cursor, col, data_table_id, data_type):
+def update_column_info(cursor, col_name, data_table_id, data_type):
     """Add a row for this data column to the column info metadata table."""
 
     # TODO How to handled existing rows?
@@ -400,26 +379,30 @@ def update_column_info(cursor, col, data_table_id, data_type):
     # Create Column Info entry
     cursor.execute(
         """
-        INSERT INTO metabase.column_info
-        (data_table_id,
-        column_name,
-        data_type,
-        updated_by,
-        date_last_updated
+        INSERT INTO metabase.column_info (
+            data_table_id,
+            column_name,
+            data_type,
+            updated_by,
+            date_last_updated
         )
-        VALUES
-        (
-        %(data_table_id)s,
-        %(column_name)s,
-        %(data_type)s,
-        %(updated_by)s,
-        (SELECT CURRENT_TIMESTAMP)
+        VALUES (
+            %(data_table_id)s,
+            %(column_name)s,
+            %(data_type)s,
+            %(updated_by)s,
+            (SELECT CURRENT_TIMESTAMP)
         )
+        RETURNING column_id
+        ;
         """,
         {
             'data_table_id': data_table_id,
-            'column_name': col,
+            'column_name': col_name,
             'data_type': data_type,
             'updated_by': getpass.getuser(),
         }
     )
+
+    serial_column_id = cursor.fetchall()[0][0]
+    return serial_column_id

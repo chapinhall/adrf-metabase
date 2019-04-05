@@ -65,3 +65,6 @@ Under the ``./docs/`` directory, run::
 
     make html
     
+To build docs in PDF, first install the dependencies listed on the 
+`LaTexBuilder documentation <http://www.sphinx-doc.org/en/master/usage/builders/index.html#sphinx.builders.latex.LaTeXBuilder>`_,
+and then run ``make latexpdf``.
