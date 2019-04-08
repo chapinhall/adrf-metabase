@@ -30,6 +30,16 @@ Sample codes::
 
     CREATE SCHEMA metabase;
 
+--------------------------
+Run command line interface
+--------------------------
+
+In the root directory of this repo, run::
+
+    extract.py -s <schema_name> -t <table_name>
+
+to extract metadata from your database table. More information can be found in the documentation of ``extract.py``.
+
 ------------------------
 Run migration script
 ------------------------
