@@ -4,6 +4,11 @@ ADRF Metabase
 
 Tools for handling metadata associated with administrative data sets.
 
+A Jupyter Notebook that helps you walk through the setup process
+interactively can be found at `sample_setup_commands.ipynb`_.
+
+.. _sample_setup_commands.ipynb: sample_setup_commands.ipynb
+
 --------------
 Requirements
 --------------
