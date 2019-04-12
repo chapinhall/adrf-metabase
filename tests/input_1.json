@@ -1,7 +1,7 @@
 {  
    "schema":"schema_1",
    "table":"table_1",
-   "categorical_threshold":"10",
+   "categorical_threshold":10,
    "date_format":"YYYY-MM",
    "type_overrides":{  
        "col1":"text",

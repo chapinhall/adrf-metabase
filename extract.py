@@ -18,63 +18,66 @@ select * from metabase.code_frequency where data_table_id = <data_table_id>;
 
 """
 
-import argparse
+import sys
 
 import sqlalchemy
 
 from metabase import extract_metadata
+from metabase import parse_input
 
 
-parser = argparse.ArgumentParser()
+def update_data_table(full_table_name):
+    """Update meatabase.data_table with this new table.
 
-parser.add_argument(
-    '-s', '--schema', type=str, required=True,
-    help='Schema name of the data')
-parser.add_argument(
-    '-t', '--table', type=str, required=True,
-    help='Table name of the data')
-parser.add_argument(
-    '-c', '--categorical', type=int, default=10,
-    help='Max number of distinct values in all categorical columns')
+    This function is not intended to be part of the final metabase design but
+    it is useful for testing in this stage.
 
-args = parser.parse_args()
-schema_name = args.schema
-table_name = args.table
-categorical_threshold = args.categorical
 
-full_table_name = schema_name + '.' + table_name
-
-engine = sqlalchemy.create_engine('postgres://metaadmin@localhost/postgres')
-
-# Update meatabase.data_table with this new table.
-max_id = engine.execute(
-    'SELECT MAX(data_table_id) FROM metabase.data_table'
-    ).fetchall()[0][0]
-if max_id is None:
-    new_id = 1
-else:
-    new_id = max_id + 1
-print("data_table_id is {} for table {}".format(new_id, full_table_name))
-
-engine.execute(
     """
-    INSERT INTO metabase.data_table
-    (
-    data_table_id,
-    file_table_name
-    )
-    VALUES
-    (
-    %(data_table_id)s,
-    %(file_table_name)s
-    )
-    """,
-    {
-        'data_table_id': new_id,
-        'file_table_name': full_table_name
-    }
-)
 
-# Extract metadata from data.
-extract = extract_metadata.ExtractMetadata(data_table_id=new_id)
-extract.process_table(categorical_threshold=categorical_threshold)
+    engine = sqlalchemy.create_engine(
+        'postgres://metaadmin@localhost/postgres')
+    max_id = engine.execute(
+        'SELECT MAX(data_table_id) FROM metabase.data_table'
+    ).fetchall()[0][0]
+    if max_id is None:
+        new_id = 1
+    else:
+        new_id = max_id + 1
+        print("data_table_id is {} for table {}".format(
+            new_id, full_table_name))
+
+    engine.execute(
+        """
+        INSERT INTO metabase.data_table
+        (
+        data_table_id,
+        file_table_name
+        )
+        VALUES
+        (
+        %(data_table_id)s,
+        %(file_table_name)s
+        )
+        """,
+        {
+            'data_table_id': new_id,
+            'file_table_name': full_table_name
+        }
+    )
+
+    return new_id
+
+
+if __name__ == "__main__":
+
+    args = parse_input.parse_command_line_args(sys.argv[1:])
+    full_table_name = parse_input.derive_full_table_name(args)
+    categorical_threshold = args.categorical
+    input_file = args.input_file
+
+    new_id = update_data_table(full_table_name)
+
+    # Extract metadata from data.
+    extract = extract_metadata.ExtractMetadata(data_table_id=new_id)
+    extract.process_table(categorical_threshold=categorical_threshold)
