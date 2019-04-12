@@ -413,55 +413,106 @@ def update_column_info(cursor, col_name, data_table_id, data_type):
 #   Called by `ExtractMetadata.export_table_metadata()`
 # #############################################################################
 
-def select_gmeta_fields(metabase_cur, data_table_id):
+def select_table_level_gmeta_fields(metabase_cur, data_table_id):
     """
     """
     date_format_str = 'YYYY-MM-DD'
-    return_ls = []
 
-    metabase_cur.execute("""
-        SELECT
-            file_table_name AS file_name,
-            data_table.data_set_id AS dataset_id,
-            -- data_set.title AS title,
-            -- data_set.description AS description,
-            TO_CHAR(start_date, '{date_format_str}')
-                AS temporal_coverage_start,
-            TO_CHAR(end_date, '{date_format_str}') AS temporal_coverage_end,
-            -- geographical_coverage
-            -- geographical_unit
-            -- data_set.keywords AS keywords,
-            -- data_set.category AS category,
-            -- data_set.document_link AS reference_url,
-            contact AS data_steward,
-            -- data_set.data_set_contact AS data_steward_organization,
-            size AS file_size
-            -- number_rows AS rows    NOTE: not included in the sample file
-            -- number_columns AS columns  NOTE: not included in the sample file
-        FROM metabase.data_table
-            -- JOIN metabase.data_set USING (data_set_id)
-        WHERE data_table_id = {data_table_id}
-    """.format(
-        data_table_id=data_table_id,
-        date_format_str=date_format_str,
-        )
+    metabase_cur.execute(
+        """
+            SELECT
+                file_table_name AS file_name,
+                data_table.data_set_id AS dataset_id,
+                -- data_set.title AS title,
+                -- data_set.description AS description,
+                TO_CHAR(start_date, %(date_format_str)s)
+                    AS temporal_coverage_start,
+                TO_CHAR(end_date, %(date_format_str)s) AS temporal_coverage_end,
+                -- geographical_coverage
+                -- geographical_unit
+                -- data_set.keywords AS keywords,
+                -- data_set.category AS category,
+                -- data_set.document_link AS reference_url,
+                contact AS data_steward,
+                -- data_set.data_set_contact AS data_steward_organization,
+                size AS file_size
+                -- number_rows AS rows    NOTE: not included in the sample file
+                -- number_columns AS columns  NOTE: not included in the sample file
+            FROM metabase.data_table
+                -- JOIN metabase.data_set USING (data_set_id)
+            WHERE data_table_id = %(data_table_id)s
+        """, 
+        {
+            'date_format_str': date_format_str,
+            'data_table_id': data_table_id
+        },
     )
 
     table_level_gmeta_fields_dict = metabase_cur.fetchall()[0]
     # Index by 0 since the result is a list of one dict.
 
+    return table_level_gmeta_fields_dict
+
+
+def select_column_level_gmeta_fields(metabase_cur, data_table_id):
+    """
+    """
+    metabase_cur.execute(
+        """
+            SELECT column_id, column_name, data_type
+            FROM metabase.column_info
+            WHERE data_table_id = %(data_table_id)s;
+        """,
+        {
+            'data_table_id': data_table_id,
+        },
+    )
+
+    column_id_name_type_tp_ls = metabase_cur.fetchall()
+
+    for column_id, _column_name, data_type in column_id_name_type_tp_ls:
+        if data_type == 'numeric':
+            column_gmeta_fields_dict = select_numeric_gmeta_fields(
+                metabase_cur,
+                column_id,
+            )
+
+
+
+
+    if numeric_flag:
+        col_type = 'numeric'
+        data = numeric_data
+    elif date_flag:
+        col_type = 'date'
+        data = date_data
+    elif code_flag:
+        col_type = 'code'
+        data = code_data
+    else:
+        col_type = 'text'
+
+
+
     return_ls.append(table_level_gmeta_fields_dict)
 
-    metabase_cur.execute("""
-        SELECT column_id, column_name
-        FROM metabase.column_info
-        WHERE data_table_id = {data_table_id}
-    """.format(data_table_id=data_table_id))
-
-    for column_id, column_name in metabase_cur.fetchall():
-
-
     return return_ls
+
+
+def select_numeric_gmeta_fields(metabase_cur, column_id):
+    """
+    """
+    metabase_cur.execute(
+        """
+        SELECT
+            minimum,
+            maximum,
+            mean
+        FROM metabase.numeric_column
+        WHERE column_id = %
+        """)
+
+
 
 
 def test(metabase_cur, data_table_id):
@@ -486,6 +537,7 @@ def shape_gmeta_in_json(gmeta_fields_dict, output_filepath):
         'dataset_id': None,
         'columns_metadata': {},
     }
+
 
     # for col_name,     
     # output_dict['columns_metadata'][]

@@ -295,8 +295,20 @@ class ExtractMetadata():
             with metabase_conn.cursor(cursor_factory=psycopg2.extras.DictCursor
                     ) as metabase_cur:
 
-                gmeta_fields_dict = extract_metadata_helper.\
-                    select_gmeta_fields(metabase_cur, self.data_table_id)
+                table_level_gmeta_fields_dict = extract_metadata_helper.\
+                    select_table_level_gmeta_fields(
+                        metabase_cur,
+                        self.data_table_id,
+                )
+
+                column_level_gmeta_fields_ = extract_metadata_helper.\
+                    select_table_level_gmeta_fields(
+                        metabase_cur,
+                        self.data_table_id,
+                )
+
+
+
 
                 # test_return = extract_metadata_helper.test(metabase_cur, self.data_table_id)
 
