@@ -3,6 +3,7 @@
 
 from collections import namedtuple, Counter
 import getpass
+import json
 import statistics
 
 import psycopg2
@@ -406,3 +407,89 @@ def update_column_info(cursor, col_name, data_table_id, data_type):
 
     serial_column_id = cursor.fetchall()[0][0]
     return serial_column_id
+
+
+# #############################################################################
+#   Called by `ExtractMetadata.export_table_metadata()`
+# #############################################################################
+
+def select_gmeta_fields(metabase_cur, data_table_id):
+    """
+    """
+    date_format_str = 'YYYY-MM-DD'
+    return_ls = []
+
+    metabase_cur.execute("""
+        SELECT
+            file_table_name AS file_name,
+            data_table.data_set_id AS dataset_id,
+            -- data_set.title AS title,
+            -- data_set.description AS description,
+            TO_CHAR(start_date, '{date_format_str}')
+                AS temporal_coverage_start,
+            TO_CHAR(end_date, '{date_format_str}') AS temporal_coverage_end,
+            -- geographical_coverage
+            -- geographical_unit
+            -- data_set.keywords AS keywords,
+            -- data_set.category AS category,
+            -- data_set.document_link AS reference_url,
+            contact AS data_steward,
+            -- data_set.data_set_contact AS data_steward_organization,
+            size AS file_size
+            -- number_rows AS rows    NOTE: not included in the sample file
+            -- number_columns AS columns  NOTE: not included in the sample file
+        FROM metabase.data_table
+            -- JOIN metabase.data_set USING (data_set_id)
+        WHERE data_table_id = {data_table_id}
+    """.format(
+        data_table_id=data_table_id,
+        date_format_str=date_format_str,
+        )
+    )
+
+    table_level_gmeta_fields_dict = metabase_cur.fetchall()[0]
+    # Index by 0 since the result is a list of one dict.
+
+    return_ls.append(table_level_gmeta_fields_dict)
+
+    metabase_cur.execute("""
+        SELECT column_id, column_name
+        FROM metabase.column_info
+        WHERE data_table_id = {data_table_id}
+    """.format(data_table_id=data_table_id))
+
+    for column_id, column_name in metabase_cur.fetchall():
+
+
+    return return_ls
+
+
+def test(metabase_cur, data_table_id):
+    metabase_cur.execute("""
+        SELECT column_id, column_name
+        FROM metabase.column_info
+        WHERE data_table_id = {data_table_id}
+    """.format(data_table_id=data_table_id))
+
+    
+    return metabase_cur.fetchall()
+
+
+def shape_gmeta_in_json(gmeta_fields_dict, output_filepath):
+    """
+    Shape and export GMETA fields in JSON format.
+
+    TODO: Reshape the structure of the output JSON to match the sample format.
+    """
+    output_dict = {
+        'file_name': gmeta_fields_dict['file_name'],
+        'dataset_id': None,
+        'columns_metadata': {},
+    }
+
+    # for col_name,     
+    # output_dict['columns_metadata'][]
+
+    
+    with open(output_filepath, 'w') as output_file:
+        json.dump(output_dict, output_file, indent=4, sort_keys=True)
