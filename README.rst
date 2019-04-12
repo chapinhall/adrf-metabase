@@ -40,9 +40,15 @@ Command line usage
 
 Once the ``metabase`` schema and tables have been set up, the metadata extraction process can be initiated with ::
 
+    python extract.py -s <schema_name> -t <table_name>
+
+Replace ``<schema_name>`` and ``<table_name>`` with the name of the postgres schema and table you want to extract metadata from. 
+
+Alternatively, ``extract.py`` can the path of a JSON configuration file as a command line argument::
+
     python extract.py -f <config.json>
 
-``extract.py`` takes the path of a JSON configuration file as a command line argument. The config file contains the following key/value pairs::
+The config file contains the following key/value pairs::
 
     {  
         "schema": "",
