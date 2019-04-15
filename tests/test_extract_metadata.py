@@ -137,12 +137,12 @@ def setup_get_column_level_metadata(setup_module, request):
             (1, 'data.col_level_meta');
 
         CREATE TABLE data.col_level_meta
-            (c_num INT, c_text TEXT, c_code TEXT, c_date DATE);
+            (c_num TEXT, c_text TEXT, c_code TEXT, c_date TEXT);
 
         INSERT INTO data.col_level_meta (c_num, c_text, c_code, c_date) VALUES
-            (1, 'abc',   'M', '2018-01-01'),
-            (2, 'efgh',  'F', '2018-02-01'),
-            (3, 'ijklm', 'F', '2018-03-02'),
+            ('1', 'abc',   'M', '2018-01-01'),
+            ('2', 'efgh',  'F', '2018-02-01'),
+            ('3', 'ijklm', 'F', '2018-03-02'),
             (NULL, NULL, NULL, NULL);
     """)
 
@@ -322,3 +322,212 @@ def test_get_column_level_metadata_code(
     expected = set([('M', 1), ('F', 2), (None, 1)])
 
     assert expected == all_frequencies
+
+
+def test_get_column_level_metadata_type_overrides_text(
+        setup_module, setup_get_column_level_metadata):
+    """Test type overrides when code overrides text."""
+
+    with patch(
+            'metabase.extract_metadata.settings',
+            setup_module.mock_params):
+        extract = extract_metadata.ExtractMetadata(data_table_id=1)
+
+    type_overrides = {'c_text': 'code'}
+    extract.process_table(
+        categorical_threshold=2,
+        type_overrides=type_overrides)
+
+    engine = setup_module.engine
+    results = engine.execute("""
+        SELECT
+            data_table_id,
+            column_name,
+            code,
+            frequency,
+            updated_by,
+            date_last_updated
+        FROM metabase.code_frequency
+    """).fetchall()
+
+    categorical_columns = (
+        results[0]['column_name'],
+        results[1]['column_name'],
+    )
+
+    assert 'c_text' in categorical_columns
+
+
+def test_get_column_level_metadata_type_overrides_code(
+        setup_module, setup_get_column_level_metadata):
+    """Test type overrides when text overrides categorical."""
+
+    with patch(
+            'metabase.extract_metadata.settings',
+            setup_module.mock_params):
+        extract = extract_metadata.ExtractMetadata(data_table_id=1)
+
+    type_overrides = {'c_code': 'text'}
+    extract.process_table(
+        categorical_threshold=2,
+        type_overrides=type_overrides)
+
+    engine = setup_module.engine
+    results = engine.execute("""
+            SELECT
+            data_table_id,
+            column_name,
+            max_length,
+            min_length,
+            median_length,
+            updated_by,
+            date_last_updated
+        FROM metabase.text_column
+    """).fetchall()
+
+    text_columns = (results[0]['column_name'], results[1]['column_name'])
+
+    assert 'c_code' in text_columns
+
+
+def test_get_column_level_metadata_type_overrides_date(
+        setup_module, setup_get_column_level_metadata):
+    """Test type overrides when text overrides date."""
+
+    with patch(
+            'metabase.extract_metadata.settings',
+            setup_module.mock_params):
+        extract = extract_metadata.ExtractMetadata(data_table_id=1)
+
+    type_overrides = {'c_date': 'text'}
+    extract.process_table(
+        categorical_threshold=2,
+        type_overrides=type_overrides)
+
+    engine = setup_module.engine
+    results = engine.execute("""
+            SELECT
+            data_table_id,
+            column_name,
+            max_length,
+            min_length,
+            median_length,
+            updated_by,
+            date_last_updated
+        FROM metabase.text_column
+    """).fetchall()
+
+    assert 2 == len(results)
+    text_columns = (results[0]['column_name'], results[1]['column_name'])
+
+    assert 'c_date' in text_columns
+
+
+def test_get_column_level_metadata_type_overrides_numeric(
+        setup_module, setup_get_column_level_metadata):
+    """Test type overrides when text overrides numeric."""
+
+    with patch(
+            'metabase.extract_metadata.settings',
+            setup_module.mock_params):
+        extract = extract_metadata.ExtractMetadata(data_table_id=1)
+
+    type_overrides = {'c_num': 'text'}
+    extract.process_table(
+        categorical_threshold=2,
+        type_overrides=type_overrides)
+
+    engine = setup_module.engine
+    results = engine.execute("""
+            SELECT
+            data_table_id,
+            column_name,
+            max_length,
+            min_length,
+            median_length,
+            updated_by,
+            date_last_updated
+        FROM metabase.text_column
+    """).fetchall()
+
+    text_columns = (results[0]['column_name'], results[1]['column_name'])
+
+    assert 'c_num' in text_columns
+
+
+def test_get_column_level_metadata_type_overrides_date_with_code(
+        setup_module, setup_get_column_level_metadata):
+    """Test type overrides when code overrides numeric."""
+
+    with patch(
+            'metabase.extract_metadata.settings',
+            setup_module.mock_params):
+        extract = extract_metadata.ExtractMetadata(data_table_id=1)
+
+    type_overrides = {'c_date': 'code'}
+    extract.process_table(
+        categorical_threshold=2,
+        type_overrides=type_overrides)
+
+    engine = setup_module.engine
+    results = engine.execute("""
+        SELECT
+            data_table_id,
+            column_name,
+            code,
+            frequency,
+            updated_by,
+            date_last_updated
+        FROM metabase.code_frequency
+
+    """).fetchall()
+
+    code_columns = [i['column_name'] for i in results]
+    assert 'c_date' in code_columns
+
+
+def test_get_column_level_metadata_type_overrides_numeric_with_code(
+        setup_module, setup_get_column_level_metadata):
+    """Test type overrides when code overrides numeric."""
+
+    with patch(
+            'metabase.extract_metadata.settings',
+            setup_module.mock_params):
+        extract = extract_metadata.ExtractMetadata(data_table_id=1)
+
+    type_overrides = {'c_num': 'code'}
+    extract.process_table(
+        categorical_threshold=2,
+        type_overrides=type_overrides)
+
+    engine = setup_module.engine
+    results = engine.execute("""
+        SELECT
+            data_table_id,
+            column_name,
+            code,
+            frequency,
+            updated_by,
+            date_last_updated
+        FROM metabase.code_frequency
+
+    """).fetchall()
+
+    code_columns = [i['column_name'] for i in results]
+    assert 'c_num' in code_columns
+
+
+def test_get_column_level_metadata_invalid_override(
+        setup_module, setup_get_column_level_metadata):
+    """Test invalid type override raises error."""
+
+    with patch(
+            'metabase.extract_metadata.settings',
+            setup_module.mock_params):
+        extract = extract_metadata.ExtractMetadata(data_table_id=1)
+
+    type_overrides = {'c_text': 'numeric'}
+    with pytest.raises(ValueError):
+        extract.process_table(
+            categorical_threshold=2,
+            type_overrides=type_overrides)

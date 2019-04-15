@@ -258,9 +258,9 @@ def get_text_metadata(col_data):
 
 def update_date(metabase_cursor, col_name, col_data,
                 data_table_id):
-    """Update Column Info and Date Column for a date column."""
-
-
+    """
+    Update Column Info and Date Column for a date column.
+    """
     serial_column_id = update_column_info(metabase_cursor, col_name,
                                           data_table_id, 'date')
 
