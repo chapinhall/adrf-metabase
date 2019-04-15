@@ -10,7 +10,7 @@ from psycopg2 import sql
 
 
 def get_column_type(data_cursor, col, categorical_threshold, schema_name,
-                    table_name):
+                    table_name, date_format):
     """Return the column type and the contents of the column."""
 
     col_type = ''
@@ -18,7 +18,8 @@ def get_column_type(data_cursor, col, categorical_threshold, schema_name,
 
     numeric_flag, numeric_data = is_numeric(data_cursor, col, schema_name,
                                             table_name)
-    date_flag, date_data = is_date(data_cursor, col, schema_name, table_name)
+    date_flag, date_data = is_date(data_cursor, col, schema_name, table_name,
+                                   date_format)
     code_flag, code_data = is_code(data_cursor, col, schema_name, table_name,
                                    categorical_threshold)
 
@@ -63,19 +64,33 @@ def is_numeric(data_cursor, col, schema_name, table_name):
     return flag, data
 
 
-def is_date(data_cursor, col, schema_name, table_name):
-    """Return True and contents of column if column is date.
+def is_date(data_cursor, col, schema_name, table_name, date_format):
+    """
+    Return True and contents of column if column is date.
+
+    TODO:
+        - Check for invalid dates (out of range)
+            - Currently they will be converted into the nearest valid date
+              without error. 
+        - Empty strings will be converted into 0001-01-01?
     """
 
     try:
         data_cursor.execute(
             sql.SQL("""
-            SELECT {}::DATE FROM {}.{}
+                SELECT
+                    CASE WHEN {} IS NOT NULL THEN TO_DATE({}::TEXT, %s)
+                    -- First convert into TEXT in case that column is in
+                    -- DATE type
+                    ELSE NULL END
+                FROM {}.{}
             """).format(
+                sql.Identifier(col),
                 sql.Identifier(col),
                 sql.Identifier(schema_name),
                 sql.Identifier(table_name),
-            )
+            ),
+            [date_format],
         )
         data = [i[0] for i in data_cursor.fetchall()]
         flag = True

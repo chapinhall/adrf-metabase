@@ -27,7 +27,8 @@ class ExtractMetadata():
         self.data_conn.autocommit = True
         self.data_cur = self.data_conn.cursor()
 
-    def process_table(self, categorical_threshold=10):
+    def process_table(self, categorical_threshold=10,
+                      date_format='YYYY-MM-DD'):
         """Update the metabase with metadata from this Data Table."""
 
         with psycopg2.connect(self.metabase_connection_string) as conn:
@@ -38,7 +39,9 @@ class ExtractMetadata():
                     cursor,
                     schema_name,
                     table_name,
-                    categorical_threshold)
+                    categorical_threshold,
+                    date_format,
+                )
 
         self.data_cur.close()
         self.data_conn.close()
@@ -108,7 +111,7 @@ class ExtractMetadata():
         # https://github.com/chapinhall/adrf-metabase/pull/8#discussion_r265339190
 
     def _get_column_level_metadata(self, metabase_cur, schema_name, table_name,
-                                   categorical_threshold):
+                                   categorical_threshold, date_format):
         """Extract column level metadata and store it in the metabase.
 
         Process columns one by one, identify or infer type, update Column Info
@@ -119,10 +122,14 @@ class ExtractMetadata():
         column_names = self.__get_column_names(schema_name, table_name)
 
         for col_name in column_names:
-            column_data = self.__get_column_type(schema_name,
-                                                 table_name,
-                                                 col_name,
-                                                 categorical_threshold)
+            column_data = self.__get_column_type(
+                schema_name,
+                table_name,
+                col_name,
+                categorical_threshold,
+                date_format,
+            )
+
             if column_data.type == 'numeric':
                 self.__update_numeric_metadata(
                     metabase_cur,
@@ -200,7 +207,7 @@ class ExtractMetadata():
         return schema_name_table_name_tp
 
     def __get_column_type(self, schema_name, table_name, col,
-                          categorical_threshold):
+                          categorical_threshold, date_format):
         """Identify or infer column type.
 
         Infers the column type.
@@ -215,7 +222,8 @@ class ExtractMetadata():
             col,
             categorical_threshold,
             schema_name,
-            table_name
+            table_name,
+            date_format,
         )
 
         return column_data

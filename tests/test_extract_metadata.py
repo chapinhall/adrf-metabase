@@ -322,3 +322,68 @@ def test_get_column_level_metadata_code(
     expected = set([('M', 1), ('F', 2), (None, 1)])
 
     assert expected == all_frequencies
+
+
+#   Tests for date_format from JSON config file
+# =========================================================================
+
+# TODO: revisit this test later. `TO_DATE()` will not raise error even if 
+# date_format does not apply. 
+
+@pytest.fixture
+def setup_date_as_string(setup_module, request):
+    engine = setup_module.engine
+
+    engine.execute("""
+        INSERT INTO metabase.data_table (data_table_id, file_table_name) VALUES
+            (1, 'data.date_as_string');
+
+        CREATE TABLE data.date_as_string
+            (c_date TEXT);
+
+        INSERT INTO data.date_as_string (c_date) VALUES
+            ('2018-01-01'),
+            ('ABCD-EF'),    -- TODO: Replace with a date in other format
+            (NULL);
+    """)
+
+    def teardown_date_as_string():
+        engine.execute("""
+            TRUNCATE TABLE metabase.data_table CASCADE;
+            DROP TABLE data.date_as_string;
+        """)
+
+    request.addfinalizer(teardown_date_as_string)
+
+
+def test_get_column_level_metadata_date_as_string(
+        setup_module,
+        setup_date_as_string):
+    """
+    When date does not correspond to date_format, treat that column as TEXT.
+    """
+    with patch(
+            'metabase.extract_metadata.settings',
+            setup_module.mock_params):
+        extract = extract_metadata.ExtractMetadata(data_table_id=1)
+
+    extract.process_table(categorical_threshold=0, date_format='YYYY-MM-DD')
+
+    engine = setup_module.engine    
+    results = engine.execute("""
+        SELECT
+            data_table_id,
+            column_name,
+            max_length,
+            min_length,
+            updated_by,
+            date_last_updated
+        FROM metabase.text_column
+    """).fetchall()[0]
+
+    assert 1 == results['data_table_id']
+    assert 'c_date' == results['column_name']
+    assert 10 == results['max_length']
+    assert 7 == results['min_length']
+    assert isinstance(results['updated_by'], str)
+    assert isinstance(results['date_last_updated'], datetime.datetime)
