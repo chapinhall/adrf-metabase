@@ -11,7 +11,7 @@ class ParseInput():
 
         self.schema = ''
         self.table = ''
-        self.categorical_trheshold = ''
+        self.categorical_threshold = ''
         self.date_format = ''
         self.type_overrides = ''
 
@@ -31,7 +31,7 @@ class ParseInput():
 
         self.schema = data['schema']
         self.table = data['table']
-        self.categorical_trheshold = data['categorical_threshold']
+        self.categorical_threshold = data['categorical_threshold']
         self.date_format = data['date_format']
         self.type_overrides = data['type_overrides']
 

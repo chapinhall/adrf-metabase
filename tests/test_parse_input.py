@@ -17,7 +17,7 @@ def test_parse_file():
 
     assert 'schema_1' == parser.schema
     assert 'table_1' == parser.table
-    assert 10 == parser.categorical_trheshold
+    assert 10 == parser.categorical_threshold
     assert 'YYYY-MM' == parser.date_format
     assert "text" == parser.type_overrides['col1']
     assert "categorical" == parser.type_overrides['col2']
