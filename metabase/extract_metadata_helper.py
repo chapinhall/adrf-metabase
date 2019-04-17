@@ -414,6 +414,7 @@ def select_table_level_gmeta_fields(metabase_cur, data_table_id):
         """
             SELECT
                 file_table_name AS file_name,
+                format AS file_type,
                 data_table.data_set_id AS dataset_id,
                 -- data_set.title AS title,
                 -- data_set.description AS description,
@@ -427,23 +428,21 @@ def select_table_level_gmeta_fields(metabase_cur, data_table_id):
                 -- data_set.document_link AS reference_url,
                 contact AS data_steward,
                 -- data_set.data_set_contact AS data_steward_organization,
-                size AS file_size
+                size::FLOAT AS file_size
                 -- number_rows AS rows    NOTE: not included in the sample file
                 -- number_columns AS columns  NOTE: not included in the sample file
             FROM metabase.data_table
                 -- JOIN metabase.data_set USING (data_set_id)
             WHERE data_table_id = %(data_table_id)s
-        """, 
+        """,
         {
             'date_format_str': date_format_str,
             'data_table_id': data_table_id
         },
     )
 
-    table_level_gmeta_fields_dict = metabase_cur.fetchall()[0]
+    return metabase_cur.fetchall()[0]
     # Index by 0 since the result is a list of one dict.
-
-    return table_level_gmeta_fields_dict
 
 
 def select_column_level_gmeta_fields(metabase_cur, data_table_id):
@@ -462,33 +461,38 @@ def select_column_level_gmeta_fields(metabase_cur, data_table_id):
 
     column_id_name_type_tp_ls = metabase_cur.fetchall()
 
-    for column_id, _column_name, data_type in column_id_name_type_tp_ls:
+    column_gmeta_fields_dict = {}
+
+    for column_id, column_name, data_type in column_id_name_type_tp_ls:
         if data_type == 'numeric':
-            column_gmeta_fields_dict = select_numeric_gmeta_fields(
+            column_gmeta_fields_dict[
+                (column_id, column_name, 'Numeric')
+                # Links Metabase data type terms to Gmeta terms.
+                # E.g. `text` in Metabase is `Textual` in Gmeta.
+            ] = select_numeric_gmeta_fields(
                 metabase_cur,
                 column_id,
             )
 
+        elif data_type == 'date':
+            column_gmeta_fields_dict[
+                (column_id, column_name, 'Temporal')
+            ] = select_temporal_gmeta_fields(
+                metabase_cur,
+                column_id,
+            )
 
+        else:
+            # data_type in ('text', 'code'):
+            # TODO: distinguish categorical columns
+            column_gmeta_fields_dict[
+                (column_id, column_name, 'Textual')
+            ] = select_textual_gmeta_fields(
+                metabase_cur,
+                column_id,
+            )
 
-
-    if numeric_flag:
-        col_type = 'numeric'
-        data = numeric_data
-    elif date_flag:
-        col_type = 'date'
-        data = date_data
-    elif code_flag:
-        col_type = 'code'
-        data = code_data
-    else:
-        col_type = 'text'
-
-
-
-    return_ls.append(table_level_gmeta_fields_dict)
-
-    return return_ls
+    return column_gmeta_fields_dict
 
 
 def select_numeric_gmeta_fields(metabase_cur, column_id):
@@ -496,44 +500,181 @@ def select_numeric_gmeta_fields(metabase_cur, column_id):
     """
     metabase_cur.execute(
         """
-        SELECT
-            minimum,
-            maximum,
-            mean
-        FROM metabase.numeric_column
-        WHERE column_id = %
-        """)
+            SELECT
+                minimum::FLOAT AS min,
+                maximum::FLOAT AS max,
+                mean::FLOAT
+                -- Without type cast it will return in Decimal('#')
+
+            FROM metabase.numeric_column
+            WHERE column_id = %(column_id)s
+        """,
+        {
+            'column_id': column_id,
+        },
+    )
+
+    result = metabase_cur.fetchall()
+    if result:
+        return result[0]
+    else:
+        return None
 
 
+def select_temporal_gmeta_fields(metabase_cur, column_id):
+    """
+    """
+    metabase_cur.execute(
+        """
+            SELECT
+                TO_CHAR(min_date, 'MM/DD/YYYY HH:MM:SS AM') AS min,
+                TO_CHAR(max_date, 'MM/DD/YYYY HH:MM:SS AM') AS max
+            FROM metabase.date_column
+            WHERE column_id = %(column_id)s
+        """,
+        {
+            'column_id': column_id,
+        },
+    )
+
+    result = metabase_cur.fetchall()
+    if result:
+        return result[0]
+    else:
+        return None
 
 
-def test(metabase_cur, data_table_id):
-    metabase_cur.execute("""
-        SELECT column_id, column_name
-        FROM metabase.column_info
-        WHERE data_table_id = {data_table_id}
-    """.format(data_table_id=data_table_id))
+def select_textual_gmeta_fields(metabase_cur, column_id):
+    """
+    """
+    metabase_cur.execute(
+        # Placeholder query for now
+        """
+            SELECT
+                max_length::FLOAT
+            FROM metabase.text_column
+            WHERE column_id = %(column_id)s
+        """,
+        {
+            'column_id': column_id,
+        },
+    )
 
-    
-    return metabase_cur.fetchall()
+    result = metabase_cur.fetchall()
+    if result:
+        return result[0]
+    else:
+        return None
 
 
-def shape_gmeta_in_json(gmeta_fields_dict, output_filepath):
+def export_gmeta_in_json(table_gmeta_dict, column_gmeta_dict, output_filepath):
     """
     Shape and export GMETA fields in JSON format.
 
     TODO: Reshape the structure of the output JSON to match the sample format.
     """
-    output_dict = {
-        'file_name': gmeta_fields_dict['file_name'],
-        'dataset_id': None,
-        'columns_metadata': {},
+    columns_metadata_dict = {}
+
+    for ((_column_id, column_name, data_type),
+         column_result) in column_gmeta_dict.items():
+        if column_result:
+            if data_type == 'Numeric':
+                columns_metadata_dict[column_name] = {
+                    'profiler-type': data_type,
+                    'profiler-most-detected': None,
+                    'missing': None,
+                    'values': None,
+                    'min': column_result['min'],
+                    'max': column_result['max'],
+                    'std': None,
+                    'mean': column_result['mean'],
+                    'Histogram Data JSON': {},
+                    'top-k': {},
+                    'top-value': None,
+                    'freq-top-value': None,
+                    'description': None,
+                }
+
+            elif data_type == 'Temporal':
+                columns_metadata_dict[column_name] = {
+                    'profiler-type': data_type,
+                    'profiler-most-detected': None,
+                    'missing': None,
+                    'values': None,
+                    'min': column_result['min'],
+                    'max': column_result['max'],
+                    'std': None,
+                    'mean': None,
+                    'top-k': {},
+                    'top-value': None,
+                    'freq-top-value': None,
+                    'description': None,
+                }
+
+            else:
+                # data_type == 'Textual':
+                # TODO: For now, categorical columns also fall in this branch
+                columns_metadata_dict[column_name] = {
+                    'profiler-type': data_type,
+                    'profiler-most-detected': None,
+                    'missing': None,
+                    'values': None,
+                    'top-k': {},
+                    'top-value': None,
+                    'freq-top-value': None,
+                    'description': None,
+                }
+
+    output_table_gmeta_dict = {
+        'file_name': table_gmeta_dict['file_name'],
+        'columns_metadata': columns_metadata_dict,
+        'file_type': table_gmeta_dict['file_type'],
+        'file_size': table_gmeta_dict['file_size'],
+        'mimetype': None,
     }
 
+    output_dict = {
+        'gmeta': [{
+            table_gmeta_dict['file_name']: {
+                'mimetype': 'application/json',
+                'content': {
+                    'dataset_id': None,
+                    'temporal_coverage_start': None,
+                    'temporal_coverage_end': None,
+                    'files_total': 1,
+                    'data_classification': None,
+                    'access_actions_required': None,
+                    'geographical_coverage': [],
+                    'keywords': [],
+                    'category': None,
+                    'dataset_version': None,
+                    'title': None,
+                    'data_usage_policy': None,
+                    'data_steward_organization': None,
+                    'data_steward': None,
+                    'files': [
+                        output_table_gmeta_dict,
+                    ],
+                    'access_requirements': None,
+                    'description': None,
+                    'source_url': None,
+                    'geographical_unit': [],
+                    'related_articles': [],
+                    'data_provider': None,
+                    'dataset_documentation': [],
+                    'dataset_version_date': None,
+                    # This field does not look like ordinary date format in the
+                    # JSON sample. E.g. 1541527053
 
-    # for col_name,     
-    # output_dict['columns_metadata'][]
+                    'source_archive': None,
+                    'dataset_citation': None,
+                    'reference_url': None,
+                    'file_names': [table_gmeta_dict['file_name']],
+                },
+                'visible_to': [],
+            },
+        }],
+    }
 
-    
     with open(output_filepath, 'w') as output_file:
         json.dump(output_dict, output_file, indent=4, sort_keys=True)

@@ -304,39 +304,29 @@ class ExtractMetadata():
         """
         Export GMETA (metadata in JSON format) for a processed table given
         data_table_id.
-
-        TODO: For now, this export metadata function work at the table level,
-        but it should work at the data set level in the future.
         """
         with psycopg2.connect(self.metabase_connection_string
                 ) as metabase_conn:
             with metabase_conn.cursor(cursor_factory=psycopg2.extras.DictCursor
                     ) as metabase_cur:
 
-                table_level_gmeta_fields_dict = extract_metadata_helper.\
+                table_gmeta_fields_dict = extract_metadata_helper.\
                     select_table_level_gmeta_fields(
                         metabase_cur,
                         self.data_table_id,
                 )
 
-                column_level_gmeta_fields_ = extract_metadata_helper.\
-                    select_table_level_gmeta_fields(
+                column_gmeta_fields_dict = extract_metadata_helper.\
+                    select_column_level_gmeta_fields(
                         metabase_cur,
                         self.data_table_id,
                 )
-
-
-
-
-                # test_return = extract_metadata_helper.test(metabase_cur, self.data_table_id)
-
-                # for column_id, column_name in test_return:
-                #     print(column_id, column_name)
 
         output_filepath = 'metadata-{}.json'.format(self.data_table_id)
 
-        extract_metadata_helper.shape_gmeta_in_json(
-            gmeta_fields_dict,
+        extract_metadata_helper.export_gmeta_in_json(
+            table_gmeta_fields_dict,
+            column_gmeta_fields_dict,
             output_filepath,
         )
 
