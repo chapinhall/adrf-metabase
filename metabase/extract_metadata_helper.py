@@ -3,6 +3,7 @@
 
 from collections import namedtuple, Counter
 import getpass
+import json
 import statistics
 
 import psycopg2
@@ -398,3 +399,286 @@ def update_column_info(cursor, col_name, data_table_id, data_type):
 
     serial_column_id = cursor.fetchall()[0][0]
     return serial_column_id
+
+
+# #############################################################################
+#   Called by `ExtractMetadata.export_table_metadata()`
+# #############################################################################
+
+def select_table_level_gmeta_fields(metabase_cur, data_table_id):
+    """
+    Select metadata at data set and table levels.
+    """
+    date_format_str = 'YYYY-MM-DD'
+
+    metabase_cur.execute(
+        """
+            SELECT
+                file_table_name AS file_name,
+                format AS file_type,
+                data_table.data_set_id AS dataset_id,
+                -- data_set.title AS title,
+                -- data_set.description AS description,
+                TO_CHAR(start_date, %(date_format_str)s)
+                    AS temporal_coverage_start,
+                TO_CHAR(end_date, %(date_format_str)s)
+                    AS temporal_coverage_end,
+                -- geographical_coverage
+                -- geographical_unit
+                -- data_set.keywords AS keywords,
+                -- data_set.category AS category,
+                -- data_set.document_link AS reference_url,
+                contact AS data_steward,
+                -- data_set.data_set_contact AS data_steward_organization,
+                size::FLOAT AS file_size
+                -- number_rows AS rows    NOTE: not included in the sample file
+                -- number_columns AS columns
+                --   NOTE: not included in the sample file
+            FROM metabase.data_table
+                -- JOIN metabase.data_set USING (data_set_id)
+            WHERE data_table_id = %(data_table_id)s
+        """,
+        {
+            'date_format_str': date_format_str,
+            'data_table_id': data_table_id
+        },
+    )
+
+    return metabase_cur.fetchall()[0]
+    # Index by 0 since the result is a list of one dict.
+
+
+def select_column_level_gmeta_fields(metabase_cur, data_table_id):
+    """
+    Select column-level metadata. Gmeta fields to export are different by
+    column type.
+    """
+    metabase_cur.execute(
+        """
+            SELECT column_id, column_name, data_type
+            FROM metabase.column_info
+            WHERE data_table_id = %(data_table_id)s;
+        """,
+        {
+            'data_table_id': data_table_id,
+        },
+    )
+
+    column_id_name_type_tp_ls = metabase_cur.fetchall()
+
+    column_gmeta_fields_dict = {}
+
+    for column_id, column_name, data_type in column_id_name_type_tp_ls:
+        if data_type == 'numeric':
+            column_gmeta_fields_dict[
+                (column_id, column_name, 'Numeric')
+                # Links Metabase data type terms to Gmeta terms.
+                # E.g. `text` in Metabase is `Textual` in Gmeta.
+            ] = select_numeric_gmeta_fields(
+                metabase_cur,
+                column_id,
+            )
+
+        elif data_type == 'date':
+            column_gmeta_fields_dict[
+                (column_id, column_name, 'Temporal')
+            ] = select_temporal_gmeta_fields(
+                metabase_cur,
+                column_id,
+            )
+
+        else:
+            # data_type in ('text', 'code'):
+            # TODO: distinguish categorical columns
+            column_gmeta_fields_dict[
+                (column_id, column_name, 'Textual')
+            ] = select_textual_gmeta_fields(
+                metabase_cur,
+                column_id,
+            )
+
+    return column_gmeta_fields_dict
+
+
+def select_numeric_gmeta_fields(metabase_cur, column_id):
+    """
+    Select Gmeta fields related to numerical columns.
+    """
+    metabase_cur.execute(
+        """
+            SELECT
+                minimum::FLOAT AS min,
+                maximum::FLOAT AS max,
+                mean::FLOAT
+                -- Without type cast it will return in Decimal('#')
+
+            FROM metabase.numeric_column
+            WHERE column_id = %(column_id)s
+        """,
+        {
+            'column_id': column_id,
+        },
+    )
+
+    result = metabase_cur.fetchall()
+    if result:
+        return result[0]
+    else:
+        return None
+
+
+def select_temporal_gmeta_fields(metabase_cur, column_id):
+    """
+    Select Gmeta fields related to temporal columns.
+    """
+    metabase_cur.execute(
+        """
+            SELECT
+                TO_CHAR(min_date, 'MM/DD/YYYY HH:MM:SS AM') AS min,
+                TO_CHAR(max_date, 'MM/DD/YYYY HH:MM:SS AM') AS max
+            FROM metabase.date_column
+            WHERE column_id = %(column_id)s
+        """,
+        {
+            'column_id': column_id,
+        },
+    )
+
+    result = metabase_cur.fetchall()
+    if result:
+        return result[0]
+    else:
+        return None
+
+
+def select_textual_gmeta_fields(metabase_cur, column_id):
+    """
+    Select Gmeta fields related to textual columns.
+    """
+    metabase_cur.execute(
+        # Placeholder query for now
+        """
+            SELECT
+                max_length::FLOAT
+            FROM metabase.text_column
+            WHERE column_id = %(column_id)s
+        """,
+        {
+            'column_id': column_id,
+        },
+    )
+
+    result = metabase_cur.fetchall()
+    if result:
+        return result[0]
+    else:
+        return None
+
+
+def export_gmeta_in_json(table_gmeta_dict, column_gmeta_dict, output_filepath):
+    """
+    Shape and export GMETA fields in JSON format.
+    """
+    columns_metadata_dict = {}
+
+    for ((_column_id, column_name, data_type),
+         column_result) in column_gmeta_dict.items():
+        if column_result:
+            if data_type == 'Numeric':
+                columns_metadata_dict[column_name] = {
+                    'profiler-type': data_type,
+                    'profiler-most-detected': None,
+                    'missing': None,
+                    'values': None,
+                    'min': column_result['min'],
+                    'max': column_result['max'],
+                    'std': None,
+                    'mean': column_result['mean'],
+                    'Histogram Data JSON': {},
+                    'top-k': {},
+                    'top-value': None,
+                    'freq-top-value': None,
+                    'description': None,
+                }
+
+            elif data_type == 'Temporal':
+                columns_metadata_dict[column_name] = {
+                    'profiler-type': data_type,
+                    'profiler-most-detected': None,
+                    'missing': None,
+                    'values': None,
+                    'min': column_result['min'],
+                    'max': column_result['max'],
+                    'std': None,
+                    'mean': None,
+                    'top-k': {},
+                    'top-value': None,
+                    'freq-top-value': None,
+                    'description': None,
+                }
+
+            else:
+                # data_type == 'Textual':
+                # TODO: For now, categorical columns also fall in this branch
+                columns_metadata_dict[column_name] = {
+                    'profiler-type': data_type,
+                    'profiler-most-detected': None,
+                    'missing': None,
+                    'values': None,
+                    'top-k': {},
+                    'top-value': None,
+                    'freq-top-value': None,
+                    'description': None,
+                }
+
+    output_table_gmeta_dict = {
+        'file_name': table_gmeta_dict['file_name'],
+        'columns_metadata': columns_metadata_dict,
+        'file_type': table_gmeta_dict['file_type'],
+        'file_size': table_gmeta_dict['file_size'],
+        'mimetype': None,
+    }
+
+    output_dict = {
+        'gmeta': [{
+            table_gmeta_dict['file_name']: {
+                'mimetype': 'application/json',
+                'content': {
+                    'dataset_id': None,
+                    'temporal_coverage_start': None,
+                    'temporal_coverage_end': None,
+                    'files_total': 1,
+                    'data_classification': None,
+                    'access_actions_required': None,
+                    'geographical_coverage': [],
+                    'keywords': [],
+                    'category': None,
+                    'dataset_version': None,
+                    'title': None,
+                    'data_usage_policy': None,
+                    'data_steward_organization': None,
+                    'data_steward': None,
+                    'files': [
+                        output_table_gmeta_dict,
+                    ],
+                    'access_requirements': None,
+                    'description': None,
+                    'source_url': None,
+                    'geographical_unit': [],
+                    'related_articles': [],
+                    'data_provider': None,
+                    'dataset_documentation': [],
+                    'dataset_version_date': None,
+                    # In Unix time. E.g. 1541527053
+                    'source_archive': None,
+                    'dataset_citation': None,
+                    'reference_url': None,
+                    'file_names': [table_gmeta_dict['file_name']],
+                },
+                'visible_to': [],
+            },
+        }],
+    }
+
+    with open(output_filepath, 'w') as output_file:
+        json.dump(output_dict, output_file, indent=4, sort_keys=True)

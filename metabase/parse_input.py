@@ -34,6 +34,7 @@ class ParseInput():
         self.categorical_threshold = data['categorical_threshold']
         self.date_format = data['date_format']
         self.type_overrides = data['type_overrides']
+        self.gmeta_output = data['gmeta_output']
 
 
 def parse_command_line_args(args):

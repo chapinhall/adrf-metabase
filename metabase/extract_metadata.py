@@ -3,6 +3,7 @@
 import getpass
 
 import psycopg2
+import psycopg2.extras
 from psycopg2 import sql
 
 from . import settings
@@ -288,7 +289,6 @@ class ExtractMetadata():
 
         Extract metadata from a categorial columns and store metadata in Column
         Info and Code Frequency. Update relevant audit fields.
-
         """
         # TODO: modify categorical_threshold to take percentage arguments.
 
@@ -298,3 +298,36 @@ class ExtractMetadata():
             col_data,
             self.data_table_id,
         )
+
+    def export_table_metadata(self, output_filepath):
+        """
+        Export GMETA (metadata in JSON format) for a processed table given
+        data_table_id.
+
+        """
+        with psycopg2.connect(
+            self.metabase_connection_string
+                ) as metabase_conn:
+            with metabase_conn.cursor(
+                cursor_factory=psycopg2.extras.DictCursor
+                    ) as metabase_cur:
+
+                table_gmeta_fields_dict = extract_metadata_helper.\
+                    select_table_level_gmeta_fields(
+                        metabase_cur,
+                        self.data_table_id,
+                    )
+
+                column_gmeta_fields_dict = extract_metadata_helper.\
+                    select_column_level_gmeta_fields(
+                        metabase_cur,
+                        self.data_table_id,
+                    )
+
+        extract_metadata_helper.export_gmeta_in_json(
+            table_gmeta_fields_dict,
+            column_gmeta_fields_dict,
+            output_filepath,
+        )
+
+        print('Exported GMETA to', output_filepath)
