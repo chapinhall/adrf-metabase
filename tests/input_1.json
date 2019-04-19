@@ -6,5 +6,6 @@
    "type_overrides":{  
        "col1":"text",
        "col2":"categorical"
-   }
+   },
+   "gmeta_output": "gmeta_1.json"
 }

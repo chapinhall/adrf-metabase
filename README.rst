@@ -53,18 +53,22 @@ The config file contains the following key/value pairs::
     {  
         "schema": "",
         "table": "",
-        "categorical_threshold": "",
+        "categorical_threshold": 2,
         "date_format": "",
         "type_overrides":{  
             "column_name_1": "type_1",
             "column_name_2": "type_2",
         },
+        "gmeta_output": "exported_gmeta.json"
     }
 
 - ``schema`` and ``table`` receive the name of the postgres schema and table that we want to extract metadata from
 - ``categorical_threshold`` takes an integer. If the number of unique values in a column is less than or equal to this threshold, the column will be considered as categorical and its metadata will be processed accordingly.
+  - Default to 10 if leave blank
 - ``type_overrides`` takes column name / data type pairs. Data type should be one of the following: ``text``, ``code`` (categorical), ``numeric``, or ``date``. If the type of a column is specified here, Metabase will directly use it and bypass the type-detection process for that column.
 - ``date_format`` takes a string representing the format of values in date columns.
+- ``gmeta_output`` takes a string specifying the filepath for metadata output in JSON format (*Gmeta*).
+  - If leave blank, will not export Gmeta.
 
 -----------
 Tests

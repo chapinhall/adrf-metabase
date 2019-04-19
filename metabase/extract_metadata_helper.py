@@ -407,6 +407,7 @@ def update_column_info(cursor, col_name, data_table_id, data_type):
 
 def select_table_level_gmeta_fields(metabase_cur, data_table_id):
     """
+    Select metadata at data set and table levels.
     """
     date_format_str = 'YYYY-MM-DD'
 
@@ -420,7 +421,8 @@ def select_table_level_gmeta_fields(metabase_cur, data_table_id):
                 -- data_set.description AS description,
                 TO_CHAR(start_date, %(date_format_str)s)
                     AS temporal_coverage_start,
-                TO_CHAR(end_date, %(date_format_str)s) AS temporal_coverage_end,
+                TO_CHAR(end_date, %(date_format_str)s)
+                    AS temporal_coverage_end,
                 -- geographical_coverage
                 -- geographical_unit
                 -- data_set.keywords AS keywords,
@@ -430,7 +432,8 @@ def select_table_level_gmeta_fields(metabase_cur, data_table_id):
                 -- data_set.data_set_contact AS data_steward_organization,
                 size::FLOAT AS file_size
                 -- number_rows AS rows    NOTE: not included in the sample file
-                -- number_columns AS columns  NOTE: not included in the sample file
+                -- number_columns AS columns
+                --   NOTE: not included in the sample file
             FROM metabase.data_table
                 -- JOIN metabase.data_set USING (data_set_id)
             WHERE data_table_id = %(data_table_id)s
@@ -447,6 +450,8 @@ def select_table_level_gmeta_fields(metabase_cur, data_table_id):
 
 def select_column_level_gmeta_fields(metabase_cur, data_table_id):
     """
+    Select column-level metadata. Gmeta fields to export are different by
+    column type.
     """
     metabase_cur.execute(
         """
@@ -497,6 +502,7 @@ def select_column_level_gmeta_fields(metabase_cur, data_table_id):
 
 def select_numeric_gmeta_fields(metabase_cur, column_id):
     """
+    Select Gmeta fields related to numerical columns.
     """
     metabase_cur.execute(
         """
@@ -523,6 +529,7 @@ def select_numeric_gmeta_fields(metabase_cur, column_id):
 
 def select_temporal_gmeta_fields(metabase_cur, column_id):
     """
+    Select Gmeta fields related to temporal columns.
     """
     metabase_cur.execute(
         """
@@ -546,6 +553,7 @@ def select_temporal_gmeta_fields(metabase_cur, column_id):
 
 def select_textual_gmeta_fields(metabase_cur, column_id):
     """
+    Select Gmeta fields related to textual columns.
     """
     metabase_cur.execute(
         # Placeholder query for now
@@ -570,8 +578,6 @@ def select_textual_gmeta_fields(metabase_cur, column_id):
 def export_gmeta_in_json(table_gmeta_dict, column_gmeta_dict, output_filepath):
     """
     Shape and export GMETA fields in JSON format.
-
-    TODO: Reshape the structure of the output JSON to match the sample format.
     """
     columns_metadata_dict = {}
 
@@ -663,9 +669,7 @@ def export_gmeta_in_json(table_gmeta_dict, column_gmeta_dict, output_filepath):
                     'data_provider': None,
                     'dataset_documentation': [],
                     'dataset_version_date': None,
-                    # This field does not look like ordinary date format in the
-                    # JSON sample. E.g. 1541527053
-
+                    # In Unix time. E.g. 1541527053
                     'source_archive': None,
                     'dataset_citation': None,
                     'reference_url': None,
