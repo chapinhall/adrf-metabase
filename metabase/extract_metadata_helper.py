@@ -487,9 +487,18 @@ def select_column_level_gmeta_fields(metabase_cur, data_table_id):
                 column_id,
             )
 
+        elif data_type == 'code':
+            # TODO: Categorical type is not presented in the Gmeta sample.
+            # Currently treated the same as Textual columns.
+            column_gmeta_fields_dict[
+                (column_id, column_name, 'Categorical')
+            ] = select_categorical_gmeta_fields(
+                metabase_cur,
+                column_id,
+            )
+
         else:
-            # data_type in ('text', 'code'):
-            # TODO: distinguish categorical columns
+            # data_type = 'text':
             column_gmeta_fields_dict[
                 (column_id, column_name, 'Textual')
             ] = select_textual_gmeta_fields(
@@ -549,6 +558,37 @@ def select_temporal_gmeta_fields(metabase_cur, column_id):
         return result[0]
     else:
         return None
+
+
+def select_categorical_gmeta_fields(metabase_cur, column_id):
+    """
+    Select Gmeta fields related to categorical columns.
+
+    Note that the return value is different from other column types.
+
+    Args:
+        metabase_cur
+        column_id
+    
+    Return:
+        (Query result object fetched from psycopg2's DictCursor):
+            Like a list of dictionaries with column names as keys. An empty
+            list is returned if no record to fetch.
+    """
+    metabase_cur.execute(
+        """
+            SELECT code, frequency
+            FROM metabase.code_frequency
+            WHERE column_id = %(column_id)s
+            ORDER BY frequency DESC
+            LIMIT 20    -- Top-k
+        """,
+        {
+            'column_id': column_id,
+        },
+    )
+
+    return metabase_cur.fetchall()
 
 
 def select_textual_gmeta_fields(metabase_cur, column_id):
@@ -617,9 +657,24 @@ def export_gmeta_in_json(table_gmeta_dict, column_gmeta_dict, output_filepath):
                     'description': None,
                 }
 
+            elif data_type == 'Categorical':
+                top_k_dict = {}
+                for row_dict in column_result:
+                    top_k_dict[row_dict['code']] = row_dict['frequency']
+
+                columns_metadata_dict[column_name] = {
+                    'profiler-type': data_type,
+                    'profiler-most-detected': None,
+                    'missing': None,
+                    'values': None,
+                    'top-k': top_k_dict,
+                    'top-value': column_result[0]['code'],
+                    'freq-top-value': column_result[0]['frequency'],
+                    'description': None,
+                }
+
             else:
                 # data_type == 'Textual':
-                # TODO: For now, categorical columns also fall in this branch
                 columns_metadata_dict[column_name] = {
                     'profiler-type': data_type,
                     'profiler-most-detected': None,
